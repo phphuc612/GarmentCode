@@ -11,6 +11,7 @@ __pycache__
 
 # Compiled files
 *.pyc
+*.dll
 dist
 *egg-info*
 
@@ -31,3 +32,12 @@ output*
 
 # Nicegui
 .nicegui
+
+# Data
+body_samples_path/
+datasets_path/
+datasets_sim/
+*.obj
+
+# Testing code
+test.ipynb
