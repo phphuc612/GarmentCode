@@ -1,17 +1,16 @@
 """Routines to run cloth simulation"""
 
 # Basic
-import time
 import multiprocessing
 import platform
 import signal
+import time
 from pathlib import Path
 
 # BoxMeshGen
 import pygarment.meshgen.boxmeshgen as bmg
 from pygarment.meshgen.boxmeshgen import BoxMesh
 from pygarment.meshgen.sim_config import PathCofig
-
 # Warp simulation
 from pygarment.meshgen.simulation import run_sim
 
@@ -48,7 +47,8 @@ def batch_sim(data_path, output_path, dataset_props,
         print('Warning: dataset is frozen, processing is skipped')
         return True
 
-    resume = init_sim_props(dataset_props, batch_run=True, force_restart=force_restart)
+    resume = init_sim_props(dataset_props, batch_run=True,
+                            force_restart=force_restart)
     body_type = 'default_body' if run_default_body else 'random_body'
     data_props_file = output_path / f'dataset_properties_{body_type}.yaml'
     pattern_names = _get_pattern_names(data_path)
@@ -74,7 +74,7 @@ def batch_sim(data_path, output_path, dataset_props,
                 samples_name=dataset_props['body_samples'],
                 default_body=run_default_body
             )
-        except BaseException as e: 
+        except BaseException as e:
             # Not all files available
             print("***Pattern loading failed (paths)***")
             dataset_props.add_fail('sim', 'crashes', pattern_name)
@@ -86,7 +86,7 @@ def batch_sim(data_path, output_path, dataset_props,
             break
 
     # Fin
-    print(f'\nFinished batch of {data_path}')  
+    print(f'\nFinished batch of {data_path}')
     try:
         if len(dataset_props['sim']['stats']['processed']) >= len(pattern_names):
             # processing successfully finished -- no need to resume later
@@ -107,13 +107,13 @@ def batch_sim(data_path, output_path, dataset_props,
 
 
 def resim_fails(data_path, output_path, dataset_props,
-              run_default_body=False, caching=False):
+                run_default_body=False, caching=False):
     """Resimulate failure cases -- maybe some of them would get fixed"""
 
     print('************** RESIMULATING FAILS ****************')
 
     sim_stats = dataset_props['sim']['stats']
-    
+
     # Collect fails and remove them from fails list if any
     fails = sim_stats['fails']
     to_resim = set()
@@ -121,12 +121,13 @@ def resim_fails(data_path, output_path, dataset_props,
         if key not in ['cloth_body_intersection', 'cloth_self_intersection']:
             for el in fails[key]:
                 to_resim.add(el)
-            fails[key] = []   # NOTE: If nothing to be added in this key, it was already an empty array (and nothing changed)
-    
+            # NOTE: If nothing to be added in this key, it was already an empty array (and nothing changed)
+            fails[key] = []
+
     if not len(to_resim):
         # Return previous finished state
         return dataset_props['frozen'] if 'frozen' in dataset_props else False
-    
+
     if 'processed' not in sim_stats:
         sim_stats['processed'] = _get_pattern_names(data_path)
     dataset_props['frozen'] = False
@@ -137,16 +138,18 @@ def resim_fails(data_path, output_path, dataset_props,
 
     # Start simulation again
     finished = batch_sim(
-        data_path, output_path, dataset_props, 
-        run_default_body=run_default_body, 
-        num_samples=len(to_resim)+1, 
-        caching=caching, 
+        data_path, output_path, dataset_props,
+        run_default_body=run_default_body,
+        num_samples=len(to_resim)+1,
+        caching=caching,
         force_restart=False
     )
 
     return finished
 
 # ------- Utils -------
+
+
 def init_sim_props(props, batch_run=False, force_restart=False):
     """
         Add default config values if not given in props & clean-up stats if not resuming previous processing
@@ -155,32 +158,32 @@ def init_sim_props(props, batch_run=False, force_restart=False):
     if 'sim' not in props:
         props.set_section_config(
             'sim',
-            max_sim_steps=1000, #affects speed
-            max_meshgen_time=20, #in seconds, affects speed
-            max_frame_time= 15, #in seconds, affects speed
-            max_sim_time= 1500, #in seconds, affects speed
+            max_sim_steps=1000,  # affects speed
+            max_meshgen_time=20,  # in seconds, affects speed
+            max_frame_time=15,  # in seconds, affects speed
+            max_sim_time=1500,  # in seconds, affects speed
             zero_gravity_steps=10,  # 0.01  # depends on the units used, #affects speed
-            static_threshold=0.03, #affects speed
-            non_static_percent=1.5, #affects speed
+            static_threshold=0.03,  # affects speed
+            non_static_percent=1.5,  # affects speed
             max_body_collisions=0,
             max_self_collisions=0,
-            resolution_scale=1.0, #affects speed
-            ground=False, # Do not add floor s.t. garment falls infinitely if falls
+            resolution_scale=1.0,  # affects speed
+            ground=False,  # Do not add floor s.t. garment falls infinitely if falls
         )
 
     if 'material' not in props['sim']['config']:
-        props['sim']['config']['material'] = {  
-            'garment_tri_ka': 10000.0,  
+        props['sim']['config']['material'] = {
+            'garment_tri_ka': 10000.0,
 
-            'garment_edge_ke': 1.0,  
+            'garment_edge_ke': 1.0,
             'garment_tri_ke': 10000.0,
-            'spring_ke': 50000.0,  
+            'spring_ke': 50000.0,
 
             'garment_edge_kd': 10.0,
-            'garment_tri_kd': 1.0,  
-            'spring_kd': 10.0, 
+            'garment_tri_kd': 1.0,
+            'spring_kd': 10.0,
 
-            'fabric_density':  1.0,  
+            'fabric_density':  1.0,
             'fabric_thickness': 0.1,
             'fabric_friction': 0.5
 
@@ -189,26 +192,26 @@ def init_sim_props(props, batch_run=False, force_restart=False):
     if 'options' not in props['sim']['config']:
         props['sim']['config']['options'] = {
             'enable_particle_particle_collisions': False,
-            'enable_triangle_particle_collisions': True, 
+            'enable_triangle_particle_collisions': True,
             'enable_edge_edge_collisions': True,
             'enable_body_collision_filters': True,
 
-            'enable_attachment_constraint': True,   
-            'attachment_frames': 400, 
+            'enable_attachment_constraint': True,
+            'attachment_frames': 400,
             'attachment_label_names': ['lower_interface'],
             'attachment_stiffness': [1000.],
-            'attachment_damping': [10.], 
+            'attachment_damping': [10.],
 
             'global_damping_factor': 0.25,
             'global_damping_effective_velocity': 0.0,
             'global_max_velocity': 25.0,
 
             'enable_global_collision_filter': True,
-            'enable_cloth_reference_drag': False,    
+            'enable_cloth_reference_drag': False,
             'cloth_reference_margin': 0.1,
 
             # FIXME Re-writes mesh references causing occasional CUDA errors when referencing meshes other than the body
-            'enable_body_smoothing': False,  
+            'enable_body_smoothing': False,
             'smoothing_total_smoothing_factor': 1.0,
             'smoothing_recover_start_frame': 150,
             'smoothing_num_steps': 100,
@@ -223,7 +226,7 @@ def init_sim_props(props, batch_run=False, force_restart=False):
         props.set_section_config(
             'render',
             resolution=[800, 800],
-            sides=['front','back'],
+            sides=['front', 'back'],
             front_camera_location=None,
             uv_texture={
                 'seam_width': 0.5,
@@ -244,27 +247,28 @@ def init_sim_props(props, batch_run=False, force_restart=False):
             if last_processed not in props['sim']['stats']['fails']['crashes']:
                 # add to simulation failures
                 # Remove last from processed if it did not crash
-                if last_processed not in props['sim']['stats']['stop_over']:   
+                if last_processed not in props['sim']['stats']['stop_over']:
                     props['sim']['stats']['processed'].pop()
                 else:
                     # Already passed here once -> add as crash
-                    props['sim']['stats']['fails']['crashes'].append(last_processed)
+                    props['sim']['stats']['fails']['crashes'].append(
+                        last_processed)
 
-        props['sim']['stats']['stop_over'].append(last_processed)  # indicate resuming dataset simulation
-
+        props['sim']['stats']['stop_over'].append(
+            last_processed)  # indicate resuming dataset simulation
 
         return True
 
     # else new life
     # Prepare commulative stats
-    props.set_section_stats('sim', 
-                            fails={}, 
-                            meshgen_time={}, 
-                            sim_time={}, 
-                            spf={}, 
-                            fin_frame={}, 
+    props.set_section_stats('sim',
+                            fails={},
+                            meshgen_time={},
+                            sim_time={},
+                            spf={},
+                            fin_frame={},
                             face_count={},
-                            body_collisions={}, 
+                            body_collisions={},
                             self_collisions={})
     props['sim']['stats']['fails'] = {
         'crashes': [],
@@ -299,7 +303,8 @@ def template_simulation(paths: PathCofig, props, caching=False):
           '\nLoading garment: ', garment.name)
 
     meshgen_start_time = time.time()
-    timeout_after = int(get_dict_default_value(sim_props['config'], 'max_meshgen_time', 20))
+    timeout_after = int(get_dict_default_value(
+        sim_props['config'], 'max_meshgen_time', 20))
 
     try:
         _load_boxmesh_timeout(garment, timeout_after)
@@ -335,33 +340,38 @@ def template_simulation(paths: PathCofig, props, caching=False):
         props.add_fail('sim', failure_case, garment.name)
     else:
         # garment.save_mesh(tag='stitched')  # Saving the geometry before eny forces were applied
-        sim_props['stats']['meshgen_time'][garment.name] = time.time() - meshgen_start_time
+        sim_props['stats']['meshgen_time'][garment.name] = time.time() - \
+            meshgen_start_time
         sim_props['stats']['face_count'][garment.name] = len(garment.faces)
         sim_props_option = sim_props['config']['options']
-        
-        vertex_normals = get_dict_default_value(sim_props_option,'store_vertex_normals',False)
-        store_panels = get_dict_default_value(sim_props_option,'store_panels',False)
+
+        vertex_normals = get_dict_default_value(
+            sim_props_option, 'store_vertex_normals', False)
+        store_panels = get_dict_default_value(
+            sim_props_option, 'store_panels', False)
         garment.serialize(
-            paths, 
-            with_v_norms=vertex_normals, 
+            paths,
+            with_v_norms=vertex_normals,
             store_panels=store_panels,
             uv_config=props['render']['config']['uv_texture']
         )
 
         run_sim(
-            garment.name,  
-            props, 
+            garment.name,
+            props,
             paths,
             save_v_norms=vertex_normals,
-            store_usd=caching,  # NOTE: False for fast simulation!, 
+            store_usd=caching,  # NOTE: False for fast simulation!,
             optimize_storage=sim_props['config']['optimize_storage'],
             verbose=False
         )
 
+
 def _load_boxmesh_timeout(garment, timeout_after):
     if platform.system() == "Windows":
         """https://stackoverflow.com/a/14920854"""
-        p = multiprocessing.Process(target=garment.load(), name="GarmentGeneration")
+        p = multiprocessing.Process(
+            target=garment.load(), name="GarmentGeneration")
         p.start()
 
         # Wait timeout_after seconds for garment.load()
@@ -396,6 +406,7 @@ def get_dict_default_value(props, name, default_value):
     if name in props:
         return props[name]
     return default_value
+
 
 def _serialize_props_with_sim_stats(dataset_props, filename):
     """Compute data processing statistics and serialize props to file"""

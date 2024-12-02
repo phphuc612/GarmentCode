@@ -13,35 +13,39 @@
 #
 ###########################################################################
 
+import multiprocessing
+import platform
+import signal
 import sys
 import time
 import traceback
-import platform
-import multiprocessing
-import signal
-import trimesh
 
+import trimesh
 # Warp
 import warp as wp
 
+from pygarment.meshgen.garment import Cloth
 # Custom code
 from pygarment.meshgen.render.pythonrender import render_images
-from pygarment.meshgen.garment import Cloth
-from pygarment.meshgen.sim_config import SimConfig, PathCofig
+from pygarment.meshgen.sim_config import PathCofig, SimConfig
 
 wp.init()
+
 
 class SimulationError(BaseException):
     """To be rised when panel stitching cannot be executed correctly"""
     pass
 
+
 class FrameTimeOutError(BaseException):
     """To be rised when frame takes too long to simulate"""
     pass
 
+
 class SimTimeOutError(BaseException):
     """To be rised when simulation takes too long"""
     pass
+
 
 def optimize_garment_storage(paths: PathCofig):
     """Prepare the data element for compact storage: store the meshes as ply instead of obj, 
@@ -72,79 +76,76 @@ def update_progress(progress, total):
     # https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
     amtDone = progress / total
     num_dash = int(amtDone * 50)
-    sys.stdout.write('\rProgress: [{0:50s}] {1:.1f}%'.format('#' * num_dash + '-' * (50 - num_dash), amtDone * 100))
+    sys.stdout.write('\rProgress: [{0:50s}] {1:.1f}%'.format(
+        '#' * num_dash + '-' * (50 - num_dash), amtDone * 100))
     sys.stdout.flush()
 
-def _run_frame_with_timeout(garment, frame_timeout, frame_num):
-    """Run frame while keeping a cap on time to run it"""
-    try:
-        if platform.system() == "Windows":
-            """https://stackoverflow.com/a/14920854"""
-
-            if frame_num == 0: #only do it on first frame due to slowdown
-                p_frame = multiprocessing.Process(target=garment.run_frame(), name="FrameSimulation")
-                p_frame.start()
-
-                # Wait timeout_after seconds for garment.run_frame()
-                p_frame.join(frame_timeout)
-
-                # If thread is active
-                if p_frame.is_alive():
-                    # Terminate the process
-                    p_frame.terminate()
-                    p_frame.join()
-                    raise TimeoutError
-            else:
-                garment.run_frame()
-
-        elif platform.system() in ["Linux", "OSX"]:
-            """https://code-maven.com/python-timeout"""
-
-            def alarm_handler(signum, frame):
-                raise TimeoutError
-
-            signal.signal(signal.SIGALRM, alarm_handler)
-            signal.alarm(frame_timeout)
-            try:
-                garment.run_frame()
-            except TimeoutError as ex:
-                raise TimeoutError
-            else:
-                signal.alarm(0)
-
-    except TimeoutError as e:
-        raise FrameTimeOutError
 
 def sim_frame_sequence(garment, config, store_usd=False, verbose=False):
 
+    frame_timeout_after = config.max_frame_time
     # Save initial state
     if store_usd:
         garment.render_usd_frame()
 
     start_time = time.time()
     for frame in range(0, config.max_sim_steps):
-        
+
         if verbose:
             print(f'\n------ Frame {frame + 1} ------')
         else:
             update_progress(frame, config.max_sim_steps)
 
-        garment.frame = frame 
+        garment.frame = frame
 
-        #Run frame and raise FrameTimeOutError if frame takes too long to simulate
+        # Run frame and raise FrameTimeOutError if frame takes too long to simulate
 
         static = False
-        if config.max_frame_time is None:
-            # No frame time limits
-            garment.run_frame()
-        else:
-            # NOTE: frame timeouts only work in the main thread of the program. 
-            # disable frame timeout by passing 'null' as a max_frame_time parameter in config
-            _run_frame_with_timeout(
-                garment, 
-                frame_timeout=config.max_frame_time if frame > 0 else config.max_frame_time * 2,
-                frame_num=frame
-            )
+        if frame == 0:
+            frame_timeout_after *= 2
+        try:
+            if platform.system() == "Windows":
+                """https://stackoverflow.com/a/14920854"""
+
+                if frame == 0:  # only do it on first frame due to slowdown
+                    p_frame = multiprocessing.Process(
+                        target=garment.run_frame(), name="FrameSimulation")
+                    p_frame.start()
+
+                    # Wait timeout_after seconds for garment.run_frame()
+                    p_frame.join(frame_timeout_after)
+
+                    # If thread is active
+                    if p_frame.is_alive():
+                        # Terminate the process
+                        p_frame.terminate()
+                        p_frame.join()
+                        raise TimeoutError
+                else:
+                    garment.run_frame()
+
+            elif platform.system() in ["Linux", "OSX"]:
+                """https://code-maven.com/python-timeout"""
+
+                def alarm_handler(signum, frame):
+                    raise TimeoutError
+
+                signal.signal(signal.SIGALRM, alarm_handler)
+                signal.alarm(frame_timeout_after)
+                s_time = time.time()
+                try:
+                    garment.run_frame()
+                except TimeoutError as ex:
+                    raise TimeoutError
+
+                else:
+                    e_time = time.time() - s_time
+                    # print("No timeout error with time: ", e_time)
+                    signal.alarm(0)
+
+                pass
+        except TimeoutError as e:
+            raise FrameTimeOutError
 
         if verbose:
             num_cloth_cloth_contacts = garment.count_self_intersections()
@@ -158,13 +159,13 @@ def sim_frame_sequence(garment, config, store_usd=False, verbose=False):
         runtime = time.time() - start_time
         if runtime > config.max_sim_time:
             raise SimTimeOutError
-        
+
 
 def run_sim(
-        cloth_name, props, paths: PathCofig, 
-        save_v_norms=False, store_usd=False, 
+        cloth_name, props, paths: PathCofig,
+        save_v_norms=False, store_usd=False,
         optimize_storage=False,
-        verbose=False): 
+        verbose=False):
     """Initialize and run the simulation
     !! Important !! 
         'store_usd' parameter slows down the simulation to CPU rates because of required CPU-GPU copies and file writes. Use only for debugging
@@ -174,13 +175,13 @@ def run_sim(
 
     start_time = time.time()
 
-    config = SimConfig(sim_props['config'])   # Why separate class at all? 
+    config = SimConfig(sim_props['config'])   # Why separate class at all?
     garment = Cloth(cloth_name, config, paths, caching=store_usd)
 
     try:
         print("Simulation..")
         sim_frame_sequence(garment, config, store_usd, verbose=verbose)
-    
+
     except FrameTimeOutError:
         print(f"FrameTimeOutError at frame {garment.frame}")
         props.add_fail('sim', 'frame_timeout', cloth_name)
@@ -223,7 +224,7 @@ def run_sim(
 
         if num_body_collisions > config.max_body_collisions:
             props.add_fail('sim', 'cloth_body_intersection', cloth_name)
-        if num_self_collisions: 
+        if num_self_collisions:
             print(f'Self-Intersecting with {num_self_collisions}, '
                   f'is fail: {num_self_collisions > config.max_self_collisions}')
             if num_self_collisions > config.max_self_collisions:
@@ -236,17 +237,20 @@ def run_sim(
     frame = garment.frame
     print(f"\nSimulation took #frames={frame + 1}")
 
-    sim_props['stats']['sim_time'][cloth_name] = sim_time = time.time() - start_time
-    sim_props['stats']['spf'][cloth_name] = sim_time / frame if frame else sim_time
+    sim_props['stats']['sim_time'][cloth_name] = sim_time = time.time() - \
+        start_time
+    sim_props['stats']['spf'][cloth_name] = sim_time / \
+        frame if frame else sim_time
     sim_props['stats']['fin_frame'][cloth_name] = frame
 
-    garment.save_frame(save_v_norms=save_v_norms) #saving after stats
+    garment.save_frame(save_v_norms=save_v_norms)  # saving after stats
 
     # Render images
     s_time = time.time()
-    render_images(paths, garment.v_body, garment.f_body, render_props['config'])
+    render_images(paths, garment.v_body, garment.f_body,
+                  render_props['config'])
     render_image_time = time.time() - s_time
-    render_props['stats']['render_time'][cloth_name] = render_image_time  
+    render_props['stats']['render_time'][cloth_name] = render_image_time
     print(f"Rendering {cloth_name} took {render_image_time}s")
 
     if optimize_storage:

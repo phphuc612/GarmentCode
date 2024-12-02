@@ -1,9 +1,8 @@
 from copy import copy
 
-from numpy.linalg import norm
 import numpy as np
-
-from pygarment.garmentcode.edge import EdgeSequence, Edge
+from numpy.linalg import norm
+from pygarment.garmentcode.edge import Edge, EdgeSequence
 from pygarment.garmentcode.utils import close_enough
 
 
@@ -11,6 +10,7 @@ class Interface:
     """Description of an interface of a panel or component
         that can be used in stitches as a single unit
     """
+
     def __init__(self, panel, edges, ruffle=1., right_wrong=False):
         """
         Parameters:
@@ -28,11 +28,13 @@ class Interface:
                 sufficient in most cases.
         """
 
-        self.edges = edges if isinstance(edges, EdgeSequence) else EdgeSequence(edges)
-        self.panel = [panel for _ in range(len(self.edges))]  # matches every edge 
+        self.edges = edges if isinstance(
+            edges, EdgeSequence) else EdgeSequence(edges)
+        self.panel = [panel for _ in range(
+            len(self.edges))]  # matches every edge
         self.right_wrong = [right_wrong for _ in range(len(self.edges))]
 
-        # Allow to enfoce change the direction of edge 
+        # Allow to enfoce change the direction of edge
         # (used in many-to-many stitches correspondance determination)
         self.edges_flipping = [False for _ in range(len(self.edges))]
 
@@ -50,8 +52,9 @@ class Interface:
                 self.ruffle.append(dict(coeff=last_coef, sec=[last_start, i]))
                 last_start, last_coef = i, coef
 
-            self.ruffle.append(dict(coeff=last_coef, sec=[last_start, len(ruffle)]))
-                
+            self.ruffle.append(
+                dict(coeff=last_coef, sec=[last_start, len(ruffle)]))
+
         else:
             self.ruffle = [dict(coeff=ruffle, sec=[0, len(self.edges)])]
 
@@ -72,7 +75,8 @@ class Interface:
                 else:
                     # Don't let extention to affect the rest of the sequence
                     # Find the vert that separates the ruffle seqences
-                    prev_edge, next_edge = projected[r['sec'][1] - 1], projected[r['sec'][1]]
+                    prev_edge, next_edge = projected[r['sec']
+                                                     [1] - 1], projected[r['sec'][1]]
 
                     # Common vertex
                     common_v = prev_edge.end if prev_edge.end is next_edge.end or prev_edge.end is next_edge.start else prev_edge.start
@@ -90,7 +94,8 @@ class Interface:
                     projected[r['sec'][0]:r['sec'][1]].extend(1 / r['coeff'])
 
                     # move the next edges s.t. created vertex alignes with the original common vertex
-                    projected[r['sec'][1]:].translate_by([common_v[0] - common_v_copy[0], common_v[1] - common_v_copy[1]])
+                    projected[r['sec'][1]:].translate_by(
+                        [common_v[0] - common_v_copy[0], common_v[1] - common_v_copy[1]])
 
                     # re-chain the edges
                     if copy_to_end:
@@ -106,9 +111,11 @@ class Interface:
         projecting_lengths = []
         for r in self.ruffle:
             if not close_enough(r['coeff'], 1, 1e-3):
-                projecting_lengths += [e.length() / r['coeff'] for e in self.edges[r['sec'][0]:r['sec'][1]]]
+                projecting_lengths += [e.length() / r['coeff']
+                                       for e in self.edges[r['sec'][0]:r['sec'][1]]]
             else:
-                projecting_lengths += [e.length() for e in self.edges[r['sec'][0]:r['sec'][1]]]
+                projecting_lengths += [e.length()
+                                       for e in self.edges[r['sec'][0]:r['sec'][1]]]
 
         return np.array(projecting_lengths)
 
@@ -160,7 +167,7 @@ class Interface:
             if all(e.start is not v for v in verts_2d):  # Ensuring uniqueness
                 verts_2d.append(e.start)
                 matching_panels.append(panel)
-            
+
             if all(e.end is not v for v in verts_2d):  # Ensuring uniqueness
                 verts_2d.append(e.end)
                 matching_panels.append(panel)
@@ -179,20 +186,19 @@ class Interface:
         verts_3d = []
         for e, panel in zip(self.edges, self.panel):
             # Using curve linearization for more accurate approximation of bbox
-            lin_edges = e.linearize()  
+            lin_edges = e.linearize()
             verts_2d = lin_edges.verts()
             verts_3d += [panel.point_to_3D(v) for v in verts_2d]
         verts_3d = np.asarray(verts_3d)
 
         return verts_3d.min(axis=0), verts_3d.max(axis=0)
-        
 
     def __len__(self):
         return len(self.edges)
-    
+
     def __str__(self) -> str:
         return f'Interface: {[p.name for p in self.panel]}: {str(self.oriented_edges())}'
-    
+
     def __repr__(self) -> str:
         return self.__str__()
 
@@ -221,7 +227,7 @@ class Interface:
             r['sec'][1] = enum - r['sec'][1]
             # Swap
             r['sec'][0], r['sec'][1] = r['sec'][1], r['sec'][0]
-        
+
         return self
 
     def flip_edges(self):
@@ -232,7 +238,7 @@ class Interface:
                 matching in the multi-stitches
         """
         self.edges_flipping = [not e for e in self.edges_flipping]
-        
+
         return self
 
     # TODO Edge Sequence Function?
@@ -243,20 +249,21 @@ class Interface:
             Note that the input should prescrive new ordering for all affected
             edges e.g. if moving 0 -> 1, specify the new location for 1 as well
         """
-        
+
         for i, j in zip(curr_edge_ids, projected_edge_ids):
             for r in self.ruffle:
-                if (i >= r['sec'][0] and i < r['sec'][1] 
+                if (i >= r['sec'][0] and i < r['sec'][1]
                         and (j < r['sec'][0] or j >= r['sec'][1])):
                     raise NotImplementedError(
                         f'{self.__class__.__name__}::ERROR::reordering between panel-related sub-segments is not supported')
-        
+
         new_edges = EdgeSequence()
         new_panel_list = []
         new_flipping_info = []
         new_right_wrong = []
         for i in range(len(self.panel)):
-            id = i if i not in curr_edge_ids else projected_edge_ids[curr_edge_ids.index(i)]
+            id = i if i not in curr_edge_ids else projected_edge_ids[curr_edge_ids.index(
+                i)]
             # edges
             new_edges.append(self.edges[id])
             new_flipping_info.append(self.edges_flipping[id])
@@ -264,7 +271,7 @@ class Interface:
             new_panel_list.append(self.panel[id])
             # connectivity indication
             new_right_wrong.append(self.right_wrong[id])
-            
+
         self.edges = new_edges
         self.panel = new_panel_list
         self.edges_flipping = new_flipping_info
@@ -277,7 +284,7 @@ class Interface:
             * new_edges -- new edges to insert in place of orig
             * new_panels -- per-edge panel objects indicating where each of
                 new_edges belong to
-        
+
         NOTE: the ruffle indicator for the new_edges is expected to be the
             same as for orig edge
         Specifying new indicators is not yet supported
@@ -285,8 +292,8 @@ class Interface:
         """
         if isinstance(orig, Edge):
             orig = self.edges.index(orig)
-        if orig < 0: 
-            orig = len(self.edges) + orig 
+        if orig < 0:
+            orig = len(self.edges) + orig
         self.edges.substitute(orig, new_edges)
 
         # Update panels & flip info & right_wrong info
@@ -300,7 +307,7 @@ class Interface:
                 # TODOLOW Note propagation of default values. Allow to specify them as func input!
                 self.edges_flipping.insert(orig + j, curr_edges_flip)
                 self.right_wrong.insert(orig + j, curr_right_wrong)
-        else: 
+        else:
             self.panel.insert(orig, new_panels)
             self.edges_flipping.insert(orig, curr_edges_flip)
             self.right_wrong.insert(orig + j, curr_right_wrong)
@@ -327,19 +334,20 @@ class Interface:
         """Create interface from other interfaces: 
             * Allows to use different panels in one interface
             * different ruffle values in one interface
-            
+
             # NOTE the relative order of edges is preserved from the
             original interfaces and the incoming interface sequence
             This order will then be used in the SrtitchingRule when
             determing connectivity between interfaces
         """
-        new_int = copy(ints[0])  # shallow copy -- don't create unnecessary objects
+        new_int = copy(
+            ints[0])  # shallow copy -- don't create unnecessary objects
         new_int.edges = EdgeSequence()
         new_int.edges_flipping = []
         new_int.panel = []
         new_int.ruffle = []
         new_int.right_wrong = []
-        
+
         for elem in ints:
             shift = len(new_int.edges)
             new_int.ruffle += [copy(r) for r in elem.ruffle]
@@ -347,11 +355,11 @@ class Interface:
                 r.update(sec=[r['sec'][0] + shift, r['sec'][1] + shift])
 
             new_int.edges.append(elem.edges)
-            new_int.panel += elem.panel 
+            new_int.panel += elem.panel
             new_int.right_wrong += elem.right_wrong
-            new_int.edges_flipping += elem.edges_flipping 
-            
-        return new_int 
+            new_int.edges_flipping += elem.edges_flipping
+
+        return new_int
 
     @staticmethod
     def _is_order_matching(panel_s, vert_s, panel_1, vert1, panel_2, vert2) -> bool:

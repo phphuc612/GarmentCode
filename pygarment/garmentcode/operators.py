@@ -1,17 +1,17 @@
 """Shortcuts for common operations on panels and components"""
-from copy import deepcopy, copy
+from copy import copy, deepcopy
 
 import numpy as np
-from numpy.linalg import norm
-from scipy.spatial.transform import Rotation as R
-from scipy.optimize import minimize
 import svgpathtools as svgpath
-
-from pygarment.garmentcode.edge import Edge, CurveEdge, EdgeSequence, ILENGTH_S_TOL
-from pygarment.garmentcode.interface import Interface
-from pygarment.garmentcode.utils import vector_angle, close_enough, c_to_list, c_to_np
-from pygarment.garmentcode.utils import list_to_c
+from numpy.linalg import norm
 from pygarment.garmentcode.base import BaseComponent
+from pygarment.garmentcode.edge import (ILENGTH_S_TOL, CurveEdge, Edge,
+                                        EdgeSequence)
+from pygarment.garmentcode.interface import Interface
+from pygarment.garmentcode.utils import (c_to_list, c_to_np, close_enough,
+                                         list_to_c, vector_angle)
+from scipy.optimize import minimize
+from scipy.spatial.transform import Rotation as R
 
 
 # ANCHOR ----- Edge Sequences Modifiers ----
@@ -50,7 +50,7 @@ def cut_corner(target_shape: EdgeSequence, target_interface: Interface,
     corner_shape = target_shape.copy()
     panel = target_interface.panel[0]   # TODO Support multiple panels???
     target_edges = target_interface.edges
-    
+
     # Get rid of directions by working on vertices
     if target_edges[0].start is target_edges[-1].end:
         # Orginal edges have beed reversed in normalization or smth
@@ -63,7 +63,7 @@ def cut_corner(target_shape: EdgeSequence, target_interface: Interface,
     if corner_shape[0].start[1] > corner_shape[-1].end[1]:
         # now corner shape is oriented the same way as vertices
         corner_shape.reverse()
-        corner_shape.snap_to([0,0])
+        corner_shape.snap_to([0, 0])
 
     shortcut = corner_shape.shortcut()
 
@@ -82,23 +82,24 @@ def cut_corner(target_shape: EdgeSequence, target_interface: Interface,
     # ----- FIND OPTIMAL PLACE -----
     start = [0.5, 0.5]
     out = minimize(
-       _fit_location_corner, start, 
-       args=(shortcut[1] - shortcut[0], curve1, curve2),
-       bounds=[(0, 1), (0, 1)])
-    
+        _fit_location_corner, start,
+        args=(shortcut[1] - shortcut[0], curve1, curve2),
+        bounds=[(0, 1), (0, 1)])
+
     if verbose and not out.success:
         print(f'Cut_corner::ERROR::finding the projection (translation) is unsuccessful. Likely an error in edges choice')
         print(out)
 
     if verbose and not close_enough(out.fun):
-        print(f'Cut_corner::WARNING::projection on {target_interface} finished with fun={out.fun}')
-        print(out) 
+        print(
+            f'Cut_corner::WARNING::projection on {target_interface} finished with fun={out.fun}')
+        print(out)
 
     loc = out.x
     point1 = c_to_list(curve1.point(loc[0]))
     # re-align corner_shape with found shifts
-    corner_shape.snap_to(point1)   
-    
+    corner_shape.snap_to(point1)
+
     # ----- UPD panel ----
     # Complete to the full corner -- connect with the initial vertices
     if swaped:
@@ -109,7 +110,7 @@ def cut_corner(target_shape: EdgeSequence, target_interface: Interface,
     # Insert a new shape
     cut_edge1, _ = target_edges[0].subdivide_param([loc[0], 1-loc[0]])
     _,  cut_edge2 = target_edges[1].subdivide_param([loc[1], 1-loc[1]])
-    
+
     cut_edge1.end = corner_shape[0].start  # Connect with new insert
     cut_edge2.start = corner_shape[-1].end
 
@@ -121,10 +122,12 @@ def cut_corner(target_shape: EdgeSequence, target_interface: Interface,
     panel.edges.substitute(target_edges[1], corner_shape)
 
     # Update interface definitions
-    target_edges = EdgeSequence(target_edges.edges)  # keep the same edge references, 
-                                                     # but not the same edge sequence reference
-                                                     # In case it matches one of the interfaces (we don't want target edges to be overriden)
-    iter = panel.interfaces if isinstance(panel.interfaces, list) else panel.interfaces.values() 
+    # keep the same edge references,
+    target_edges = EdgeSequence(target_edges.edges)
+    # but not the same edge sequence reference
+    # In case it matches one of the interfaces (we don't want target edges to be overriden)
+    iter = panel.interfaces if isinstance(
+        panel.interfaces, list) else panel.interfaces.values()
     for intr in iter:
         # Substitute old edges with what's left from them after cutting
         if target_edges[0] in intr.edges:
@@ -137,12 +140,12 @@ def cut_corner(target_shape: EdgeSequence, target_interface: Interface,
     if isinstance(panel.interfaces, list):
         panel.interfaces.append(new_int)
     else:
-        panel.interfaces[f'int_{len(panel.interfaces)}'] = new_int  
+        panel.interfaces[f'int_{len(panel.interfaces)}'] = new_int
 
     return corner_shape[1:-1], new_int
 
 
-def cut_into_edge(target_shape, base_edge:Edge, offset=0, right=True,
+def cut_into_edge(target_shape, base_edge: Edge, offset=0, right=True,
                   flip_target=False, tol=1e-2):
     """ Insert edges of the target_shape into the given base_edge, starting
         from offset edges in target shape are rotated s.t. start -> end
@@ -173,7 +176,7 @@ def cut_into_edge(target_shape, base_edge:Edge, offset=0, right=True,
 
     # TODO Not only for Y-aligned shapes
     # TODOLOW Add a parameter: Align target_shape by center or from the start of the offset
-        # NOTE: the optimization routine might be different for the two options
+    # NOTE: the optimization routine might be different for the two options
 
     if isinstance(target_shape, EdgeSequence):
         return cut_into_edge_single(
@@ -190,14 +193,14 @@ def cut_into_edge(target_shape, base_edge:Edge, offset=0, right=True,
         target_shape = [s.reflect([0, median_y], [1, median_y])
                         for s in target_shape]
         # Flip the order as well to reflect orientation change
-        target_shape = [s.reverse() for s in target_shape] 
+        target_shape = [s.reverse() for s in target_shape]
 
     # Calculate relative offsets to place the whole shape at the target offset
     shortcuts = np.asarray([e.shortcut() for e in target_shape])
     rel_offsets = [(s[0][1] + s[1][1]) / 2 - median_y for s in shortcuts]
-    per_seq_offsets = [offset + r for r in rel_offsets] 
+    per_seq_offsets = [offset + r for r in rel_offsets]
 
-    # Project from farthest to closest 
+    # Project from farthest to closest
     sorted_tup = sorted(zip(per_seq_offsets, target_shape), reverse=True)
     proj_edge, int_edges = base_edge, EdgeSequence(base_edge)
     new_in_edges = EdgeSequence()
@@ -205,12 +208,12 @@ def cut_into_edge(target_shape, base_edge:Edge, offset=0, right=True,
     for off, shape in sorted_tup:
         new_edge, in_edges, new_interface = cut_into_edge(
             shape, proj_edge, offset=off, right=right, tol=tol)
-        
+
         all_new_edges.substitute(proj_edge, new_edge)
         int_edges.substitute(proj_edge, new_interface)
         new_in_edges.append(in_edges)
-        proj_edge = new_edge[0] 
-    
+        proj_edge = new_edge[0]
+
     return all_new_edges, new_in_edges, int_edges
 
 
@@ -227,37 +230,39 @@ def cut_into_edge_single(target_shape, base_edge: Edge, offset=0, right=True,
         * base_edge -- edge object, defining the border
         * right -- which direction the cut should be oriented w.r.t. the
             direction of base edge
-        * Offset -- position of the center of the target shape along the edge.  
+        * Offset -- position of the center of the target shape along the edge.
 
         Returns:
         * Newly created edges that accommodate the cut
         * Edges corresponding to the target shape
-        * Edges that lie on the original base edge 
+        * Edges that lie on the original base edge
     """
 
     target_shape = EdgeSequence(target_shape)
-    new_edges = target_shape.copy().snap_to([0, 0])  # copy and normalize translation of vertices
+    # copy and normalize translation of vertices
+    new_edges = target_shape.copy().snap_to([0, 0])
 
     # Simplify to vectors
     shortcut = new_edges.shortcut()  # "Interface" of the shape to insert
     target_shape_w = norm(shortcut)
     edge_len = base_edge.length()
 
-    if offset < target_shape_w / 2  - tol or offset > (edge_len - target_shape_w / 2) + tol:   
+    if offset < target_shape_w / 2 - tol or offset > (edge_len - target_shape_w / 2) + tol:
         # NOTE: This is not a definitive check, and the cut might still not fit, depending on the base_edge curvature
-        raise ValueError(f'Operators-CutingIntoEdge::ERROR::offset value is not within the base_edge length')
+        raise ValueError(
+            f'Operators-CutingIntoEdge::ERROR::offset value is not within the base_edge length')
 
     # find starting vertex for insertion & place edges there
     curve = base_edge.as_curve()
     rel_offset = curve.ilength(offset, s_tol=ILENGTH_S_TOL)
 
-    # ----- OPTIMIZATION --- 
+    # ----- OPTIMIZATION ---
     start = [0.1, 0.1]
     out = minimize(
-       _fit_location_edge, start, 
-       args=(rel_offset, target_shape_w, curve),
-       bounds=[(0, 1)])
-    shift = out.x  
+        _fit_location_edge, start,
+        args=(rel_offset, target_shape_w, curve),
+        bounds=[(0, 1)])
+    shift = out.x
 
     # Error checks
     if verbose and not out.success:
@@ -265,9 +270,10 @@ def cut_into_edge_single(target_shape, base_edge: Edge, offset=0, right=True,
 
     if not close_enough(out.fun, tol=0.01):
         if verbose:
-            print(out) 
-        raise RuntimeError(f'Cut_edge::ERROR::projection on {base_edge} finished with fun={out.fun}')
-    
+            print(out)
+        raise RuntimeError(
+            f'Cut_edge::ERROR::projection on {base_edge} finished with fun={out.fun}')
+
     if rel_offset + shift[0] > 1 + tol or (rel_offset - shift[1]) < 0 - tol:
         raise RuntimeError(
             f'Cut_edge::ERROR::projection on {base_edge} is out of edge bounds: '
@@ -275,24 +281,27 @@ def cut_into_edge_single(target_shape, base_edge: Edge, offset=0, right=True,
             ' Check the offset value')
 
     # All good -- integrate the target shape
-    ins_point = c_to_np(curve.point(rel_offset - shift[1])) if (rel_offset - shift[1]) > tol else base_edge.start
-    fin_point = c_to_np(curve.point(rel_offset + shift[0])) if (rel_offset + shift[0]) < 1 - tol else base_edge.end
+    ins_point = c_to_np(curve.point(
+        rel_offset - shift[1])) if (rel_offset - shift[1]) > tol else base_edge.start
+    fin_point = c_to_np(curve.point(
+        rel_offset + shift[0])) if (rel_offset + shift[0]) < 1 - tol else base_edge.end
 
     # Align the shape with an edge
-    # find rotation to apply on target shape 
+    # find rotation to apply on target shape
     insert_vector = np.asarray(fin_point) - np.asarray(ins_point)
     angle = vector_angle(shortcut[1] - shortcut[0], insert_vector)
-    new_edges.rotate(angle) 
+    new_edges.rotate(angle)
 
     # place
     new_edges.snap_to(ins_point)
 
-    # Check orientation 
+    # Check orientation
     avg_vertex = np.asarray(new_edges.verts()).mean(0)
-    right_position = np.sign(np.cross(insert_vector, avg_vertex - np.asarray(new_edges[0].start))) == -1 
+    right_position = np.sign(
+        np.cross(insert_vector, avg_vertex - np.asarray(new_edges[0].start))) == -1
     if not right and right_position or right and not right_position:
         # flip shape to match the requested direction
-        new_edges.reflect(new_edges[0].start, new_edges[-1].end)  
+        new_edges.reflect(new_edges[0].start, new_edges[-1].end)
 
     # Integrate edges
     # NOTE: no need to create extra edges if the the shape is incerted right at the beggining or end of the edge
@@ -303,21 +312,23 @@ def cut_into_edge_single(target_shape, base_edge: Edge, offset=0, right=True,
         new_edges[0].start = base_edge.start   # Connect into the original edge
     else:
         # TODOLOW more elegant subroutine
-        start_part = base_edge.subdivide_param([rel_offset - shift[1], 1 - (rel_offset - shift[1])])[0]
+        start_part = base_edge.subdivide_param(
+            [rel_offset - shift[1], 1 - (rel_offset - shift[1])])[0]
         start_part.end = new_edges[0].start
         new_edges.insert(0, start_part)
         base_edge_leftovers.append(new_edges[0])
-        start_id = 1 
+        start_id = 1
 
     if fin_point is base_edge.end:
         new_edges[-1].end = base_edge.end  # Connect into the original edge
     else:
-        end_part = base_edge.subdivide_param([rel_offset + shift[0], 1 - (rel_offset + shift[0])])[-1]
+        end_part = base_edge.subdivide_param(
+            [rel_offset + shift[0], 1 - (rel_offset + shift[0])])[-1]
         end_part.start = new_edges[-1].end
         new_edges.append(end_part)
         base_edge_leftovers.append(new_edges[-1])
         end_id = -1
-        
+
     return new_edges, new_edges[start_id:end_id], base_edge_leftovers
 
 
@@ -335,7 +346,7 @@ def _fit_location_corner(l, diff_target, curve1, curve2,
         print('Location Progression: ', (diff_curr[0] - diff_target[0])**2,
               (diff_curr[1] - diff_target[1])**2)
 
-    return ((diff_curr[0] - diff_target[0])**2 
+    return ((diff_curr[0] - diff_target[0])**2
             + (diff_curr[1] - diff_target[1])**2)
 
 
@@ -361,15 +372,16 @@ def _fit_location_edge(shift, location, width_target, curve,
 # ANCHOR ----- Panel operations ------
 def distribute_Y(component, n_copies, odd_copy_shift=0, name_tag='panel'):
     """Distribute copies of component over the circle around Oy"""
-    copies = [ component ]
+    copies = [component]
     component.name = f'{name_tag}_0'   # Unique
     delta_rotation = R.from_euler('XYZ', [0, 360 / n_copies, 0], degrees=True)
-    
+
     for i in range(n_copies - 1):
         new_component = deepcopy(copies[-1])
         new_component.name = f'{name_tag}_{i + 1}'   # Unique
         new_component.rotate_by(delta_rotation)
-        new_component.translate_to(delta_rotation.apply(new_component.translation))
+        new_component.translate_to(
+            delta_rotation.apply(new_component.translation))
 
         copies.append(new_component)
 
@@ -378,24 +390,26 @@ def distribute_Y(component, n_copies, odd_copy_shift=0, name_tag='panel'):
         for i in range(n_copies):
             if not i % 2:
                 copies[i].translate_by(copies[i].norm() * odd_copy_shift)
-        
+
     return copies
 
 
 def distribute_horisontally(component, n_copies, stride=20, name_tag='panel'):
     """Distribute copies of component over the straight horisontal line
     perpendicular to the norm"""
-    copies = [ component ]
+    copies = [component]
     component.name = f'{name_tag}_0'   # Unique
 
     if isinstance(component, BaseComponent):
-        translation_dir = component.rotation.apply([0, 0, 1])   # Horisontally along the panel
+        translation_dir = component.rotation.apply(
+            [0, 0, 1])   # Horisontally along the panel
         # FIXME What if it's looking up?
-        translation_dir = np.cross(translation_dir, [0, 1, 0])   # perpendicular to Y
+        translation_dir = np.cross(
+            translation_dir, [0, 1, 0])   # perpendicular to Y
         translation_dir = translation_dir / norm(translation_dir)
         delta_translation = translation_dir * stride
     else:
-        translation_dir = [1, 0, 0] 
+        translation_dir = [1, 0, 0]
 
     for i in range(n_copies - 1):
         new_component = deepcopy(copies[-1])   # TODO proper copy
@@ -429,7 +443,7 @@ def even_armhole_openings(front_opening, back_opening, tol=1e-2, verbose: bool =
     # Intersection with the sleeve itself line
     # svgpath tools allow solution regardless of egde types
     inter_segment = svgpath.Line(
-        list_to_c(slope_midpoint - 20 * slope_perp), 
+        list_to_c(slope_midpoint - 20 * slope_perp),
         list_to_c(slope_midpoint + 20 * slope_perp)
     )
     target_segment = cfront[-1].as_curve()
@@ -440,27 +454,29 @@ def even_armhole_openings(front_opening, back_opening, tol=1e-2, verbose: bool =
             f'Redistribute Sleeve Openings::WARNING::{len(intersect_t)} intersection points instead of one. '
             f'Front and back opening curves might be the same with lengths: {cfront.length()}, {cback.length()}'
         )
-    
-    if (len(intersect_t) >= 1 
+
+    if (len(intersect_t) >= 1
             and not (close_enough(intersect_t[0][0], 0, tol=tol)   # checking if they are already ok separated
                      or close_enough(intersect_t[0][0], 1, tol=tol))):
         # The current separation is not satisfactory
         # Update the opening shapes
         intersect_t = intersect_t[0][0]
-        subdiv = front_opening.edges[-1].subdivide_param([intersect_t, 1 - intersect_t])
-        front_opening.substitute(-1, subdiv[0])  
+        subdiv = front_opening.edges[-1].subdivide_param(
+            [intersect_t, 1 - intersect_t])
+        front_opening.substitute(-1, subdiv[0])
 
         # Move this part to the back opening
-        subdiv[1].start, subdiv[1].end = copy(subdiv[1].start), copy(subdiv[1].end)  # Disconnect vertices in subdivided version
+        subdiv[1].start, subdiv[1].end = copy(subdiv[1].start), copy(
+            subdiv[1].end)  # Disconnect vertices in subdivided version
         subdiv.pop(0)   # TODOLOW No reflect in the edge class??
         subdiv.reflect([0, 0], [1, 0]).reverse().snap_to(back_opening[-1].end)
         subdiv[0].start = back_opening[-1].end
-        
+
         back_opening.append(subdiv[0])
 
     # Align the slope with OY direction
     # for correct size of sleeve panels
-    slope_angle = np.arctan(-slope_vec[0] / slope_vec[1])	
+    slope_angle = np.arctan(-slope_vec[0] / slope_vec[1])
     front_opening.rotate(-slope_angle)
     back_opening.rotate(slope_angle)
 
@@ -488,8 +504,8 @@ def _max_curvature(curve, points_estimates=100):
 
 
 def _bend_extend_2_tangent(
-        shift, cp, target_len, direction, 
-        target_tangent_start, target_tangent_end, 
+        shift, cp, target_len, direction,
+        target_tangent_start, target_tangent_end,
         point_estimates=50):
     """Evaluate how well curve preserves the length and tangents
 
@@ -499,8 +515,8 @@ def _bend_extend_2_tangent(
     """
 
     control = np.array([
-        cp[0], 
-        [cp[1][0] + shift[0], cp[1][1] + shift[1]], 
+        cp[0],
+        [cp[1][0] + shift[0], cp[1][1] + shift[1]],
         [cp[2][0] + shift[2], cp[2][1] + shift[3]],
         cp[-1] + direction * shift[4]
     ])
@@ -513,11 +529,12 @@ def _bend_extend_2_tangent(
     tan_0_diff = (abs(curve_inverse.unit_tangent(0) - target_tangent_start))**2
     tan_1_diff = (abs(curve_inverse.unit_tangent(1) - target_tangent_end))**2
 
-    # NOTE: tried regularizing based on Y value in relative coordinates (for speed), 
+    # NOTE: tried regularizing based on Y value in relative coordinates (for speed),
     # But it doesn't produce good results
-    curvature_reg = _max_curvature(curve_inverse, points_estimates=point_estimates)**2
+    curvature_reg = _max_curvature(
+        curve_inverse, points_estimates=point_estimates)**2
 
-    end_expantion_reg = 0.001*shift[-1]**2 
+    end_expantion_reg = 0.001*shift[-1]**2
 
     return length_diff + tan_0_diff + tan_1_diff + curvature_reg + end_expantion_reg
 
@@ -536,7 +553,7 @@ def curve_match_tangents(curve, target_tan0, target_tan1, target_len=None,
     """
     if not isinstance(curve, svgpath.CubicBezier):
         raise NotImplementedError(
-            f'Curve_match_tangents::ERROR::Only Cubic Bezier curves are supported ', 
+            f'Curve_match_tangents::ERROR::Only Cubic Bezier curves are supported ',
             f'(got {type(curve)})')
 
     curve_cps = c_to_np(curve.bpoints())
@@ -550,13 +567,13 @@ def curve_match_tangents(curve, target_tan0, target_tan1, target_len=None,
     # match tangents with the requested ones while preserving length
     out = minimize(
         _bend_extend_2_tangent,  # with tangent matching
-        [0, 0, 0, 0, 0], 
+        [0, 0, 0, 0, 0],
         args=(
-            curve_cps, 
+            curve_cps,
             curve.length() if target_len is None else target_len,
             direction,
-            list_to_c(target_tan0),  
-            list_to_c(target_tan1), 
+            list_to_c(target_tan0),
+            list_to_c(target_tan1),
             70   # NOTE: Low values cause instable resutls
         ),
         method='L-BFGS-B',
@@ -570,20 +587,20 @@ def curve_match_tangents(curve, target_tan0, target_tan1, target_len=None,
 
     fin_curve_cps = [
         curve_cps[0].tolist(),
-        [curve_cps[1][0] + shift[0], curve_cps[1][1] + shift[1]], 
+        [curve_cps[1][0] + shift[0], curve_cps[1][1] + shift[1]],
         [curve_cps[2][0] + shift[2], curve_cps[2][1] + shift[3]],
-        (curve_cps[-1] + direction*shift[-1]).tolist(), 
+        (curve_cps[-1] + direction*shift[-1]).tolist(),
     ]
 
     if return_as_edge:
         fin_inv_edge = CurveEdge(
-            start=fin_curve_cps[0], 
-            end=fin_curve_cps[-1], 
+            start=fin_curve_cps[0],
+            end=fin_curve_cps[-1],
             control_points=fin_curve_cps[1:3],
             relative=False
         )
         return fin_inv_edge
-    
+
     return fin_curve_cps
 
 
@@ -598,8 +615,10 @@ def _fit_scale(s, shortcut, v1, v2, vc, d_v1, d_v2):
         a little along the line"""
     # Shortcut can be used as 2D vector, not a set of 2D points, e.g.
     shifted = deepcopy(shortcut)
-    shifted[0] += (shortcut[0] - shortcut[1]) * s[0]  # this only changes the end vertex though
-    shifted[1] += (shortcut[1] - shortcut[0]) * s[1]  # this only changes the end vertex though
+    # this only changes the end vertex though
+    shifted[0] += (shortcut[0] - shortcut[1]) * s[0]
+    # this only changes the end vertex though
+    shifted[1] += (shortcut[1] - shortcut[0]) * s[1]
 
     return ((d_v1 - _dist(shifted[0], v1) - _dist(shifted[0], vc))**2
             + (d_v2 - _dist(shifted[1], v2) - _dist(shifted[1], vc))**2

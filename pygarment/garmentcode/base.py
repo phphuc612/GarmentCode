@@ -1,12 +1,16 @@
 from abc import ABC, abstractmethod
-import numpy as np
+from typing import Literal
 
+import numpy as np
 from pygarment.garmentcode.connector import Stitches
+from pygarment.garmentcode.interface import Interface
+
+ALIGNMENT_LITERAL = Literal['center', 'top', 'bottom', 'left', 'right']
 
 
 class BaseComponent(ABC):
     """Basic interface for garment-related components
-    
+
         NOTE: modifier methods return self object to allow chaining of the
         operations
     """
@@ -71,13 +75,13 @@ class BaseComponent(ABC):
         return self
 
     def place_by_interface(
-            self, 
-            self_interface, 
-            out_interface, 
-            gap=2, 
-            alignment='center',
-            gap_dir=None
-        ):
+        self,
+        self_interface: Interface,
+        out_interface: Interface,
+        gap: int = 2,
+        alignment: ALIGNMENT_LITERAL = 'center',
+        gap_dir=None
+    ):
         """Adjust the placement of component according to the connectivity
         instruction
 
@@ -88,16 +92,16 @@ class BaseComponent(ABC):
         'left' - left on X axis
         'right' - right on X axis
         """
-        
+
         # Align translation
         self_bbox = self_interface.bbox_3d()
         out_bbox = out_interface.bbox_3d()
-        
+
         # Determine alignment point depending on requested alignment type
         point_out = (out_bbox[1] + out_bbox[0]) / 2
         point_self = (self_bbox[1] + self_bbox[0]) / 2
         if alignment == 'center':
-            pass # No modification needed
+            pass  # No modification needed
         elif alignment == 'top':
             point_out[1] = out_bbox[1][1]  # Use max in Y
             point_self[1] = self_bbox[1][1]
@@ -110,7 +114,7 @@ class BaseComponent(ABC):
         elif alignment == 'left':
             point_out[0] = out_bbox[1][0]  # Use max in X
             point_self[0] = self_bbox[1][0]
-        else: 
+        else:
             raise ValueError(
                 f'{self.__class__.__name__}::{self.name}::ERROR::'
                 f'Uknown alignment type ({alignment}) requested in place_by_interface().'
@@ -122,20 +126,18 @@ class BaseComponent(ABC):
             center = (full_bbox[0] + full_bbox[1]) / 2
             mid_self = (self_bbox[1] + self_bbox[0]) / 2
             gap_dir = mid_self - center
-        
+
         gap_dir = gap * gap_dir / np.linalg.norm(gap_dir)
         diff = point_out - (point_self + gap_dir)
-        
+
         self.translate_by(diff)
 
-        # NOTE: Norm evaluation of vertex set will fail 
+        # NOTE: Norm evaluation of vertex set will fail
         # for the alignment of 2D panels, where they are likely
-        # to be in one line or in a panel plane instead of 
+        # to be in one line or in a panel plane instead of
         # the interface place -- so I'm not using norms for gap estimation
 
         # TODO Estimate rotation
         # TODO not just placement by the midpoint of the interfaces?
         # It created a little overlap when both interfaces are angled a little differently
         return self
-
-

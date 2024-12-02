@@ -9,9 +9,12 @@ __pycache__
 # PyCharm
 .idea
 
+# Build files
+build/
+pygarment/pygarment.egg-info
+
 # Compiled files
 *.pyc
-**/*.dll
 dist
 *egg-info*
 

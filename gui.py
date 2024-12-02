@@ -1,3 +1,7 @@
+import os
+import sys
+from pathlib import Path
+sys.path.append(str((Path(os.getcwd()) / 'external').resolve()))
 from nicegui import ui, Client
 
 # Custom

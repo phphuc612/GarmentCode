@@ -1,8 +1,9 @@
-import numpy as np
-from scipy.spatial.transform import Rotation as R
+from typing import List
 
+import numpy as np
 from pygarment.garmentcode.base import BaseComponent
 from pygarment.pattern.wrappers import VisPattern
+from scipy.spatial.transform import Rotation as R
 
 
 class Component(BaseComponent):
@@ -19,7 +20,7 @@ class Component(BaseComponent):
     def set_panel_label(self, label: str, overwrite=True):
         """Propagate given label to all sub-panels (in subcomponents)"""
         subs = self._get_subcomponents()
-        for sub in subs: 
+        for sub in subs:
             sub.set_panel_label(label, overwrite)
 
     def pivot_3D(self):
@@ -34,7 +35,7 @@ class Component(BaseComponent):
 
     def length(self):
         """Length of a component in cm
-        
+
             Defaults the to the vertical length of a 3D bounding box
             * longest_dim -- if set, returns the longest dimention out of the bounding box dimentions
         """
@@ -46,13 +47,14 @@ class Component(BaseComponent):
         for subs in self._get_subcomponents():
             subs.translate_by(delta_vector)
         return self
-    
+
     def translate_to(self, new_translation):
         """Set panel translation to be exactly that vector"""
         pivot = self.pivot_3D()
         for subs in self._get_subcomponents():
             sub_pivot = subs.pivot_3D()
-            subs.translate_to(np.asarray(new_translation) + (sub_pivot - pivot))
+            subs.translate_to(np.asarray(new_translation) +
+                              (sub_pivot - pivot))
         return self
 
     def rotate_by(self, delta_rotation: R):
@@ -61,11 +63,11 @@ class Component(BaseComponent):
         for subs in self._get_subcomponents():
             # With preserving relationships between components
             rel = subs.pivot_3D() - pivot
-            rel_rotated = delta_rotation.apply(rel) 
+            rel_rotated = delta_rotation.apply(rel)
             subs.rotate_by(delta_rotation)
             subs.translate_by(rel_rotated - rel)
         return self
-    
+
     def rotate_to(self, new_rot):
         # TODOLOW Implement with correct preservation of relative placement
         # of subcomponents
@@ -76,7 +78,7 @@ class Component(BaseComponent):
     def mirror(self, axis=[0, 1]):
         """Swap this component with its mirror image by recursively mirroring
         subcomponents
-        
+
             Axis specifies 2D axis to swap around: Y axis by default
         """
         for subs in self._get_subcomponents():
@@ -108,17 +110,19 @@ class Component(BaseComponent):
             spattern.pattern['stitches'] += sub_raw['stitches']
 
         spattern.pattern['stitches'] += self.stitching_rules.assembly()
-        return spattern   
+        return spattern
 
     def bbox3D(self):
         """Evaluate 3D bounding box of the current component"""
-        
+
         subs = self._get_subcomponents()
         bboxes = [s.bbox3D() for s in subs]
 
         if not len(subs):
             # Special components without panel geometry -- no bbox defined
-            return np.array([[np.inf, np.inf, np.inf], [-np.inf, -np.inf, -np.inf]])
+            return np.array([
+                [np.inf, np.inf, np.inf], [-np.inf, -np.inf, -np.inf]
+            ])
 
         mins = np.vstack([b[0] for b in bboxes])
         maxes = np.vstack([b[1] for b in bboxes])
@@ -126,7 +130,9 @@ class Component(BaseComponent):
         return mins.min(axis=0), maxes.max(axis=0)
 
     def is_self_intersecting(self):
-        """Check whether the component have self-intersections on panel level"""
+        """Check whether the component have self-intersections 
+        on panel level
+        """
 
         for s in self._get_subcomponents():
             if s.is_self_intersecting():
@@ -134,7 +140,7 @@ class Component(BaseComponent):
         return False
 
     # Subcomponents
-    def _get_subcomponents(self):
+    def _get_subcomponents(self) -> List['BaseComponent']:
         """Unique set of subcomponents defined in the `self.subs` list or as
         attributes of the object"""
 
@@ -144,4 +150,3 @@ class Component(BaseComponent):
         return list(set([att
                          for att in all_attrs
                          if isinstance(att, BaseComponent)] + self.subs))
-

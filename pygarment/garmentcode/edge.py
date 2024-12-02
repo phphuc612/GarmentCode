@@ -1,16 +1,15 @@
-from copy import deepcopy, copy
+from copy import copy, deepcopy
+from typing import List, Union
 
 import numpy as np
-from numpy.linalg import norm
 import svgpathtools as svgpath  # https://github.com/mathandy/svgpathtools
+from numpy.linalg import norm
+from pygarment.garmentcode.utils import R2D, c_to_list, close_enough, list_to_c
+from pygarment.pattern.utils import abs_to_rel_2d, rel_to_abs_2d
 
-from pygarment.garmentcode.utils import R2D
-from pygarment.garmentcode.utils import close_enough
-from pygarment.garmentcode.utils import c_to_list
-from pygarment.garmentcode.utils import list_to_c
-from pygarment.pattern.utils import rel_to_abs_2d, abs_to_rel_2d
+# NOTE: tolerance value for evaluating curve parameter (t) from acr length
+ILENGTH_S_TOL = 1e-10
 
-ILENGTH_S_TOL = 1e-10   # NOTE: tolerance value for evaluating curve parameter (t) from acr length
 
 class Edge:
     """Edge an individual segment of a panel border connecting two panel
@@ -34,7 +33,8 @@ class Edge:
             start = [0, 0]
         if end is None:
             end = [0, 0]
-        assert not all(close_enough(s, e) for s, e in zip(start, end)), 'Start and end of an edge should differ'
+        assert not all(close_enough(s, e) for s, e in zip(
+            start, end)), 'Start and end of an edge should differ'
 
         self.start = start  # NOTE: careful with references to vertex objects
         self.end = end
@@ -82,7 +82,7 @@ class Edge:
 
     def __repr__(self) -> str:
         """ 'Official string representation' -- for nice printing of lists of edges
-        
+
         https://stackoverflow.com/questions/3558474/how-to-apply-str-function-when-printing-a-list-of-objects-in-python
         """
         return self.__str__()
@@ -94,7 +94,7 @@ class Edge:
     def shortcut(self):
         """Return straight shortcut for an edge, 
             as `np.array`
-        
+
             For straight edges it's the same as the edge itself
         """
 
@@ -110,9 +110,9 @@ class Edge:
 
         return svgpath.Line(*params)
 
-    def linearize(self, n_verts_inside = 0):
+    def linearize(self, n_verts_inside=0):
         """Return a linear approximation of an edge using the same vertex objects
-        
+
             # NOTE: for the linear edge it is an egde if n_verts_inside = 0,
             # else n_verts_inside = number of vertices (excluding the start
             and end vertices) used to create a linearization of the edge
@@ -148,7 +148,7 @@ class Edge:
         self.start, self.end = self.end, self.start
 
         return self
-    
+
     def reflect_features(self):
         """Reflect edge fetures from one side of the edge to the other"""
         # Nothing to do for straight edge
@@ -172,11 +172,11 @@ class Edge:
             angle -- desired rotation angle in radians (!)
         """
         curr_start = copy(self.start)
-        
+
         # set the start point to zero
         self.snap_to([0, 0])
         self.end[:] = np.matmul(R2D(angle), self.end)
-        
+
         # recover the original location
         self.snap_to(curr_start)
 
@@ -197,9 +197,9 @@ class Edge:
 
         if connect_internal_verts:
             self._merge_subdiv_vertices(new_edges)
-        
+
         return new_edges
-    
+
     def subdivide_param(self, fractions: list, connect_internal_verts=True):
         """Add intermediate vertices to an edge, 
             splitting its curve parametrization according to fractions
@@ -207,12 +207,12 @@ class Edge:
 
             NOTE: for line, it's the same as subdivision by length
         """
-        
+
         new_edges = self._subdivide(fractions, by_length=False)
 
         if connect_internal_verts:
             self._merge_subdiv_vertices(new_edges)
-        
+
         return new_edges
 
     def _subdivide(self, fractions: list, by_length=True):
@@ -223,7 +223,8 @@ class Edge:
 
         frac = [abs(f) for f in fractions]
         if not close_enough(fsum := sum(frac), 1, 1e-4):
-            raise RuntimeError(f'Edge Subdivision::ERROR::fraction is incorrect. The sum {fsum} is not 1')
+            raise RuntimeError(
+                f'Edge Subdivision::ERROR::fraction is incorrect. The sum {fsum} is not 1')
 
         vec = np.asarray(self.end) - np.asarray(self.start)
         verts = [self.start]
@@ -231,12 +232,12 @@ class Edge:
         for i in range(len(frac) - 1):
             verts.append(
                 [verts[-1][0] + frac[i]*vec[0],
-                verts[-1][1] + frac[i]*vec[1]]
+                 verts[-1][1] + frac[i]*vec[1]]
             )
             seq.append(Edge(verts[-2], verts[-1]))
         verts.append(self.end)
         seq.append(Edge(verts[-2], verts[-1]))
-        
+
         return seq
 
     def _merge_subdiv_vertices(self, subdivision):
@@ -270,7 +271,7 @@ class CircleEdge(Edge):
                 X value for control point is fixed at x=0.5 (edge center) to
                 avoid ambiguity
             * label: semantic label of the edge to be writted down as a property on assembly
-            
+
             NOTE: representing control point in relative coordinates
             allows preservation of curvature (arc angle, relative radius
             w.r.t. straight edge length)
@@ -300,7 +301,7 @@ class CircleEdge(Edge):
         str += [f'[{self.end[0]:.2f}, {self.end[1]:.2f}]']
 
         return 'Arc:' + ''.join(str)
-    
+
     def midpoint(self):
         """Center of the edge"""
         return rel_to_abs_2d(self.start, self.end, [0.5, self.control_y])
@@ -313,7 +314,7 @@ class CircleEdge(Edge):
         self.control_y *= -1
 
         return self
-    
+
     def reflect_features(self):
         """Reflect edge features from one side of the edge to the other"""
 
@@ -325,17 +326,19 @@ class CircleEdge(Edge):
         """Add intermediate vertices to an edge, 
             splitting its parametrization according to fractions
             while preserving the overall shape
-        
+
             NOTE: param subdiv == length subdiv for circle arcs
         """
         # NOTE: subdivide_param() is the same as subdivide_len()
         # So parent implementation is ok
         # TODOLOW Implementation is very similar to CurveEdge param-based subdivision
 
-        from pygarment.garmentcode.edge_factory import EdgeFactory  # TODOLOW: ami - better solution?
+        from pygarment.garmentcode.edge_factory import \
+            EdgeFactory  # TODOLOW: ami - better solution?
         frac = [abs(f) for f in fractions]
         if not close_enough(fsum := sum(frac), 1, 1e-4):
-            raise RuntimeError(f'Edge Subdivision::ERROR::fraction is incorrect. The sum {fsum} is not 1')
+            raise RuntimeError(
+                f'Edge Subdivision::ERROR::fraction is incorrect. The sum {fsum} is not 1')
 
         curve = self.as_curve()
         # Sub-curves
@@ -366,14 +369,14 @@ class CircleEdge(Edge):
             list_to_c([radius, radius]), 0, la, sweep,
             list_to_c(self.end)
         )
-  
+
     def as_radius_flag(self):
         """Return circle representation as radius and arc flags"""
 
-        return (self._rel_radius() * self._straight_len(), 
+        return (self._rel_radius() * self._straight_len(),
                 self._is_large_arc(),
-                self.control_y < 0)   # left/right orientation 
-  
+                self.control_y < 0)   # left/right orientation
+
     def as_radius_angle(self):
         """Return circle representation as radius and an angle"""
 
@@ -383,7 +386,7 @@ class CircleEdge(Edge):
             self.control_y < 0
         )
 
-    def linearize(self, n_verts_inside = 9):
+    def linearize(self, n_verts_inside=9):
         """Return a linear approximation of an edge using the same vertex objects
            NOTE: n_verts_inside = number of vertices (excluding the start
             and end vertices) used to create a linearization of the edge
@@ -397,13 +400,13 @@ class CircleEdge(Edge):
 
         return seq
 
-    # NOTE: The following values are calculated at runtime to allow 
+    # NOTE: The following values are calculated at runtime to allow
     # changes to control point after the edge definition
     def _rel_radius(self, abs_radius=None):
         """Eval relative radius (w.r.t. straight distance) from 3-point
         representation"""
 
-        if abs_radius: 
+        if abs_radius:
             return abs_radius / self._straight_len()
 
         # Using the formula for radius of circumscribed circle
@@ -424,16 +427,16 @@ class CircleEdge(Edge):
     def _arc_angle(self):
         """Eval arc angle from control point"""
         rel_rad = self._rel_radius()
-        
+
         # NOTE: Bound the sin to avoid out of bounds errors
         # due to floating point error accumulation
-        arc = 2 * np.arcsin(min(max(1 / rel_rad / 2, -1.), 1.))  
+        arc = 2 * np.arcsin(min(max(1 / rel_rad / 2, -1.), 1.))
 
         if self._is_large_arc():
             arc = 2 * np.pi - arc
-        
+
         return arc
-    
+
     def _is_large_arc(self):
         """Indicate if the arc sweeps the large or small angle"""
         return abs(self.control_y) > self._rel_radius()
@@ -447,9 +450,9 @@ class CircleEdge(Edge):
         # NOTE: arc representation is the same as in SVG
         rad, large_arc, right = self.as_radius_flag()
         props['curvature'] = {
-                    "type": 'circle',
+            "type": 'circle',
                     "params": [rad, int(large_arc), int(right)]
-                }
+        }
         return ends, props
 
 
@@ -457,7 +460,7 @@ class CurveEdge(Edge):
     """Curvy edge as Besier curve / B-spline"""
 
     def __init__(self, start=None, end=None, control_points=None,
-                 relative=True, 
+                 relative=True,
                  label='') -> None:
         """Define a Bezier curve edge
             * start, end: from/to vertices that the edge connects
@@ -483,7 +486,8 @@ class CurveEdge(Edge):
         self.control_points = control_points
 
         if len(self.control_points) > 2:
-            raise NotImplementedError(f'{self.__class__.__name__}::ERROR::Up to 2 control points (cubic Bezier) are supported')
+            raise NotImplementedError(
+                f'{self.__class__.__name__}::ERROR::Up to 2 control points (cubic Bezier) are supported')
 
         # Storing control points as relative since it preserves overall curve
         # shape during edge extension/contraction
@@ -494,7 +498,7 @@ class CurveEdge(Edge):
     def length(self):
         """Length of Bezier curve edge"""
         curve = self.as_curve()
-        
+
         return curve.length()
 
     def __str__(self) -> str:
@@ -505,20 +509,21 @@ class CurveEdge(Edge):
         str += [f'[{self.end[0]:.2f}, {self.end[1]:.2f}]']
 
         return 'Curve:' + ''.join(str)
-    
+
     def midpoint(self):
         """Center of the edge"""
         curve = self.as_curve()
 
         t_mid = curve.ilength(curve.length()/2, s_tol=ILENGTH_S_TOL)
         return c_to_list(curve.point(t_mid))
-    
+
     def _subdivide(self, fractions: list, by_length=False):
         """Add intermediate vertices to an edge, 
             splitting its curve parametrization or overall length according to 
             fractions while preserving the overall shape
         """
-        from pygarment.garmentcode.edge_factory import EdgeFactory  # TODOLOW: ami - better solution?
+        from pygarment.garmentcode.edge_factory import \
+            EdgeFactory  # TODOLOW: ami - better solution?
         curve = self.as_curve()
 
         # Sub-curves
@@ -559,7 +564,7 @@ class CurveEdge(Edge):
             p[0], p[1] = 1 - p[0], -p[1]
 
         return self
-    
+
     def reflect_features(self):
         """Reflect edge fetures from one side of the edge to the other"""
 
@@ -567,7 +572,7 @@ class CurveEdge(Edge):
             p[1] = -p[1]
 
         return self
-    
+
     def as_curve(self, absolute=True):
         """As svgpath curve object
 
@@ -576,12 +581,13 @@ class CurveEdge(Edge):
         """
         # Get the nodes correcly
         if absolute:
-            cp = [rel_to_abs_2d(self.start, self.end, c) for c in self.control_points]
+            cp = [rel_to_abs_2d(self.start, self.end, c)
+                  for c in self.control_points]
             nodes = np.vstack((self.start, cp, self.end))
         else:
             cp = self.control_points
             nodes = np.vstack(([0, 0], cp, [1, 0]))
-        
+
         params = nodes[:, 0] + 1j*nodes[:, 1]
 
         return svgpath.QuadraticBezier(*params) if len(cp) < 2 else svgpath.CubicBezier(*params)
@@ -591,15 +597,17 @@ class CurveEdge(Edge):
            NOTE: n_verts_inside = number of vertices (excluding the start
            and end vertices) used to create a linearization of the edge
 
-        """        
+        """
         n = n_verts_inside + 1
         tvals_init = np.linspace(0, 1, n, endpoint=False)[1:]
 
         curve = self.as_curve(absolute=False)
         curve_lengths = tvals_init * curve.length()
-        tvals = [curve.ilength(c_len, s_tol=ILENGTH_S_TOL) for c_len in curve_lengths]
+        tvals = [curve.ilength(c_len, s_tol=ILENGTH_S_TOL)
+                 for c_len in curve_lengths]
 
-        edge_verts = [rel_to_abs_2d(self.start, self.end, c_to_list(curve.point(t))) for t in tvals]
+        edge_verts = [rel_to_abs_2d(
+            self.start, self.end, c_to_list(curve.point(t))) for t in tvals]
         seq = self.to_edge_sequence(edge_verts)
 
         return seq
@@ -610,7 +618,8 @@ class CurveEdge(Edge):
         """
 
         # Variation of https://github.com/mathandy/svgpathtools/blob/5c73056420386753890712170da602493aad1860/svgpathtools/bezier.py#L197
-        curve = self.as_curve(absolute=False)   # relative coords to find real extremizers
+        # relative coords to find real extremizers
+        curve = self.as_curve(absolute=False)
         poly = svgpath.bezier2polynomial(curve, return_poly1d=True)
         y = svgpath.imag(poly)
         dy = y.deriv()
@@ -633,25 +642,26 @@ class CurveEdge(Edge):
         ends, props = super().assembly()
 
         props['curvature'] = {
-                    "type": 'quadratic' if len(self.control_points) == 1 else 'cubic',
+            "type": 'quadratic' if len(self.control_points) == 1 else 'cubic',
                     "params": self.control_points
-                }
+        }
         return ends, props
 
-    
+
 class EdgeSequence:
     """Represents a sequence of (possibly chained) edges (e.g. every next edge
         starts from the same vertex that the previous edge ends with and
         allows building some typical edge sequences
     """
+
     def __init__(self, *args, verbose: bool = False) -> None:
-        self.edges = []
+        self.edges: List[Edge] = []
         self.verbose = verbose
         for arg in args:
             self.append(arg)
 
     # ANCHOR Properties
-    def __getitem__(self, i):
+    def __getitem__(self, i) -> Union[Edge, 'EdgeSequence']:
         if isinstance(i, slice):
             # return an EdgeSequence object for slices
             e_slice = self.edges[i]
@@ -660,7 +670,7 @@ class EdgeSequence:
             return self.edges[i]
 
     def index(self, elem):
-        # Find the same object (by reference) 
+        # Find the same object (by reference)
         # list.index() is doing something different..
         # https://stackoverflow.com/a/47057419
         return next(i for i, e in enumerate(self.edges) if elem is e)
@@ -675,7 +685,7 @@ class EdgeSequence:
 
     def __str__(self) -> str:
         return 'EdgeSeq: ' + str(self.edges)
-    
+
     def __repr__(self) -> str:
         return self.__str__()
 
@@ -695,7 +705,8 @@ class EdgeSequence:
             if self.edges[i].start is not self.edges[i-1].end:
                 if self.verbose:
                     # This should be helpful to catch bugs
-                    print(f'{self.__class__.__name__}::WARNING!::Edge sequence is not properly chained')
+                    print(
+                        f'{self.__class__.__name__}::WARNING!::Edge sequence is not properly chained')
                 return False
         return True
 
@@ -715,7 +726,8 @@ class EdgeSequence:
         """Return all vertex objects"""
         verts = [self.edges[0].start]
         for e in self.edges:
-            if e.start is not verts[-1]:  # avoid adding the vertices of chained edges twice
+            # avoid adding the vertices of chained edges twice
+            if e.start is not verts[-1]:
                 verts.append(e.start)
             verts.append(e.end)
         if verts[0] is verts[-1]:  # don't double count the loop origin
@@ -724,11 +736,11 @@ class EdgeSequence:
 
     def shortcut(self):
         """Opening of an edge sequence as a vector
-        
+
             # NOTE May not reflect true shortcut if the egdes were flipped but
                 the order remained
         """
-        return np.array([self[0].start, self[-1].end]) 
+        return np.array([self[0].start, self[-1].end])
 
     def bbox(self):
         """
@@ -749,7 +761,7 @@ class EdgeSequence:
         ma = verts_2d.max(axis=0)
         xs = [mi[0], ma[0]]
         ys = [mi[1], ma[1]]
-        #return points on bounding box
+        # return points on bounding box
         b_points = []
         for v in verts_2d:
             if v[0] in xs or v[1] in ys:
@@ -758,8 +770,8 @@ class EdgeSequence:
             if not any(np.array_equal(arr, mi) for arr in b_points):
                 b_points = [b_points[0], mi, b_points[1]]
             else:
-                p = [mi[0],ma[1]]
-                b_points = [b_points[0],p,b_points[1]]
+                p = [mi[0], ma[1]]
+                b_points = [b_points[0], p, b_points[1]]
 
         # FIXME Use one common order for the bbox output
         bbox = [mi[0], ma[0], mi[1], ma[1]]
@@ -778,7 +790,8 @@ class EdgeSequence:
         elif isinstance(item, EdgeSequence):
             self.edges += item.edges
         else:
-            raise ValueError(f'{self.__class__.__name__}::ERROR::Trying to add object of incompatible type {type(item)}')
+            raise ValueError(
+                f'{self.__class__.__name__}::ERROR::Trying to add object of incompatible type {type(item)}')
         return self
 
     def insert(self, i, item):
@@ -788,9 +801,10 @@ class EdgeSequence:
             for j in range(len(item)):
                 self.edges.insert(i + j, item[j])
         else:
-            raise NotImplementedError(f'{self.__class__.__name__}::ERROR::incerting object of {type(item)} not suported (yet)')
+            raise NotImplementedError(
+                f'{self.__class__.__name__}::ERROR::incerting object of {type(item)} not suported (yet)')
         return self
-    
+
     def pop(self, i):
         if isinstance(i, Edge):
             i = self.index(i)
@@ -804,8 +818,8 @@ class EdgeSequence:
         """
         if isinstance(orig, Edge):
             orig = self.index(orig)
-        if orig < 0: 
-            orig = len(self) + orig 
+        if orig < 0:
+            orig = len(self) + orig
         self.pop(orig)
         self.insert(orig, new)
         return self
@@ -851,14 +865,14 @@ class EdgeSequence:
             angle -- desired rotation angle in radians (!)
         """
         curr_start = copy(self[0].start)
-        
+
         # set the start point to zero
         self.snap_to([0, 0])
         rot = R2D(angle)
 
         for v in self.verts():
             v[:] = np.matmul(rot, v)
-        
+
         # recover the original location
         self.snap_to(curr_start)
 
@@ -876,27 +890,30 @@ class EdgeSequence:
         # FIXME extending by negative factor should be predictable (e.g. opposite direction of extention)
 
         # Need to take the target line from the chained order
-        if not self.isChained():  
+        if not self.isChained():
             chained_edges = self.chained_order()
             chained_edges.isChained()
             if chained_edges.isLoop():
-                print(f'{self.__class__.__name__}::WARNING::Extending looped edge sequences is not available')
+                print(
+                    f'{self.__class__.__name__}::WARNING::Extending looped edge sequences is not available')
                 return self
-        else: 
+        else:
             chained_edges = self
-        
-        target_line = np.array(chained_edges[-1].end) - np.array(chained_edges[0].start)
+
+        target_line = np.array(
+            chained_edges[-1].end) - np.array(chained_edges[0].start)
         target_line = target_line / norm(target_line)
 
         # gather vertices
         verts_coords = self.verts()
         nverts_coords = np.array(verts_coords)
-        
+
         # adjust their position based on projection to the target line
         verts_projection = np.empty(nverts_coords.shape)
         fixed = nverts_coords[0]
         for i in range(nverts_coords.shape[0]):
-            verts_projection[i] = (nverts_coords[i] - fixed).dot(target_line) * target_line
+            verts_projection[i] = (
+                nverts_coords[i] - fixed).dot(target_line) * target_line
 
         new_verts = verts_coords - (1 - factor) * verts_projection
 
@@ -916,8 +933,8 @@ class EdgeSequence:
         Ref = np.array([
             [1 - 2 * vec[1]**2,  2*vec[0]*vec[1]],
             [2*vec[0]*vec[1],    - 1 + 2 * vec[1]**2]
-            ])
-        
+        ])
+
         # translate -> reflect -> translate back
         for v in self.verts():
             v[:] = np.matmul(Ref, np.asarray(v) - v0) + v0
@@ -951,7 +968,7 @@ class EdgeSequence:
         for i in range(1, len(new_seq)):
             if self[i].start is self[i-1].end:
                 new_seq[i].start = new_seq[i-1].end
-            
+
         if self.isLoop():
             new_seq[-1].end = new_seq[0].start
 
@@ -965,10 +982,10 @@ class EdgeSequence:
                 the order of edges,
 
             It might be useful for various calculations
-        
+
         """
         chained = self.copy()
-        
+
         for i in range(len(chained)):
             # Assuming the previous one is already sorted
             if i > 0 and chained[i].end is chained[i-1].end:
@@ -978,5 +995,5 @@ class EdgeSequence:
                     and (chained[i].start is chained[i+1].start or chained[i].start is chained[i+1].end)):
                 chained[i].reverse()
             # not connected to anything or connected properly -- leave as is
-        
+
         return chained

@@ -282,10 +282,28 @@ class GUIState:
                     ).classes('w-full')
                 
     def def_design_tab(self):
+        async def random():
+            self.toggle_param_update_events(self.ui_design_refs)  # Don't react to value updates
+
+            self.pattern_state.sample_design()
+            self.update_design_params_ui_state(self.ui_design_refs, self.pattern_state.design_params)
+            await self.update_pattern_ui_state()
+
+            self.toggle_param_update_events(self.ui_design_refs)  # Re-do reaction to value updates
+    
+        async def default():
+            self.toggle_param_update_events(self.ui_design_refs)
+
+            self.pattern_state.restore_design(False)
+            self.update_design_params_ui_state(self.ui_design_refs, self.pattern_state.design_params)
+            await self.update_pattern_ui_state()
+
+            self.toggle_param_update_events(self.ui_design_refs)
+
         # Set of buttons
         with ui.row():
-            ui.button('Random', on_click=self.random)
-            ui.button('Default', on_click=self.default)
+            ui.button('Random', on_click=random)
+            ui.button('Default', on_click=default)
             ui.button('Upload', on_click=self.ui_design_dialog.open)  
     
         # Design parameters
@@ -392,8 +410,8 @@ class GUIState:
         return camera
 
     def def_3d_scene(self):
-        y_fov = 30   # Degrees == np.pi / 6. rad FOV
-        camera_location = [0, -4.15, 1.25] 
+        y_fov = np.pi / 6. 
+        camera_location = [0, -200., 1.25]  
         bg_color='#ffffff'
 
         def body_visibility(value):
@@ -425,6 +443,7 @@ class GUIState:
             self.create_lights(self.ui_3d_scene, intensity=60.)
             # NOTE: texture is there, just needs a better setup
             self.ui_garment_3d = None
+            # FIXME body is mixing with the garment: https://github.com/zauberzeug/nicegui/discussions/3514
             # TODOLOW Update body model to a correct shape
             self.ui_body_3d = self.ui_3d_scene.stl(
                     '/body/mean_all.stl' 
@@ -673,7 +692,8 @@ class GUIState:
             # NOTE Splashscreen solution to block users from modifying params while updating
             # https://github.com/zauberzeug/nicegui/discussions/1988
 
-            self.spin_dialog.open()
+            self.spin_dialog.open()   
+            self.ui_3d_scene.set_visibility(False)
             # NOTE: Using threads for async call 
             # https://stackoverflow.com/questions/49822552/python-asyncio-typeerror-object-dict-cant-be-used-in-await-expression
             self.loop = asyncio.get_event_loop()
@@ -687,7 +707,12 @@ class GUIState:
                             f'geo/{self.garm_3d_filename}', 
                         ).scale(0.01).rotate(np.pi / 2, 0., 0.)
             
+            # Body invisible by default due to occlusion artifacts
+            self.ui_body_3d.visible(False)
+            self.ui_body_3d_switch.set_value(False)
+
             # Show the result! =)
+            self.ui_3d_scene.set_visibility(True)
             self.spin_dialog.close()
 
         except KeyboardInterrupt as e:
@@ -713,35 +738,6 @@ class GUIState:
         # NOTE: The files will be available publically at the static point
         # However, we cannot do much about it, since it won't be available for the interface otherwise
         shutil.copy2(path / filename, self.local_path_3d / self.garm_3d_filename)
-
-    # Design buttons updates
-    async def design_sample(self):
-        """Run design sampling"""
-        self.loop = asyncio.get_event_loop()
-        await self.loop.run_in_executor(self._async_executor, self.pattern_state.sample_design)
-
-    async def random(self):
-        # Sampling could be slow, so add spin always
-        self.spin_dialog.open() 
-
-        self.toggle_param_update_events(self.ui_design_refs)  # Don't react to value updates
-
-        await self.design_sample()
-        self.update_design_params_ui_state(self.ui_design_refs, self.pattern_state.design_params)
-        await self.update_pattern_ui_state()
-
-        self.toggle_param_update_events(self.ui_design_refs)  # Re-do reaction to value updates
-
-        self.spin_dialog.close() 
-
-    async def default(self):
-        self.toggle_param_update_events(self.ui_design_refs)
-
-        self.pattern_state.restore_design(False)
-        self.update_design_params_ui_state(self.ui_design_refs, self.pattern_state.design_params)
-        await self.update_pattern_ui_state()
-
-        self.toggle_param_update_events(self.ui_design_refs)
 
     # !SECTION
 

@@ -3,7 +3,7 @@
 # in case of crashes and/or using mini-batches
 # sh ./datasim_runner.sh 3>&1 2>&1 > C:\Users\out.txt   (path to output file)
 
-dataset_name=my_dataset
+dataset_name=garmentcodedata
 config=default_sim_props.yaml 
 sim_default_bodies=false
 batch_size=100

@@ -1,7 +1,8 @@
 import pygarment as pyg
-from assets.garment_programs.circle_skirt import CircleArcPanel
 from assets.garment_programs import skirt_paneled
 from assets.garment_programs.base_classes import BaseBand
+from assets.garment_programs.circle_skirt import CircleArcPanel
+
 
 class StraightBandPanel(pyg.Panel):
     """One panel for a panel skirt"""
@@ -16,14 +17,16 @@ class StraightBandPanel(pyg.Panel):
         # define interface
         self.interfaces = {
             'right': pyg.Interface(self, self.edges[0]),
-            'top': pyg.Interface(self, 
-                                 self.edges[1], 
-                                 ruffle=width / match_int_proportion if match_int_proportion is not None else 1.
+            'top': pyg.Interface(self,
+                                 self.edges[1],
+                                 ruffle=width /
+                                 match_int_proportion if match_int_proportion is not None else 1.
                                  ).reverse(True),
             'left': pyg.Interface(self, self.edges[2]),
-            'bottom': pyg.Interface(self, 
-                                    self.edges[3], 
-                                    ruffle=width / match_int_proportion if match_int_proportion is not None else 1.
+            'bottom': pyg.Interface(self,
+                                    self.edges[3],
+                                    ruffle=width /
+                                    match_int_proportion if match_int_proportion is not None else 1.
                                     )
         }
 
@@ -34,6 +37,7 @@ class StraightBandPanel(pyg.Panel):
 
 class StraightWB(BaseBand):
     """Simple 2 panel waistband"""
+
     def __init__(self, body, design, rise=1.) -> None:
         """Simple 2 panel waistband
 
@@ -41,7 +45,7 @@ class StraightWB(BaseBand):
                 Adapts the shape of the waistband to sit tight on top 
                 of the given rise level (top measurement). If 1. or anything less than waistband width, 
                 the rise is ignored and the StraightWB is created to sit well on the waist
-        
+
         """
         super().__init__(body, design, rise=rise)
 
@@ -52,7 +56,7 @@ class StraightWB(BaseBand):
         self.hips_back_frac = body['hip_back_width'] / body['hips']
 
         # Params
-        self.width = design['waistband']['width']['v'] 
+        self.width = design['waistband']['width']['v']
         self.rise = rise
         # Check correct values
         if self.rise + self.width > 1:
@@ -62,21 +66,21 @@ class StraightWB(BaseBand):
             self.hips, self.waist, self.rise + self.width)
         self.top_back_fraction = pyg.utils.lin_interpolation(
             self.hips_back_frac, self.waist_back_frac, self.rise + self.width)
-        
+
         self.width = self.width * body['hips_line']
 
         self.define_panels()
 
         self.front.translate_by([0, body['_waist_level'], 20])
-        self.back.translate_by([0, body['_waist_level'], -15]) 
-        
+        self.back.translate_by([0, body['_waist_level'], -15])
+
         self.stitching_rules = pyg.Stitches(
             (self.front.interfaces['right'], self.back.interfaces['right']),
             (self.front.interfaces['left'], self.back.interfaces['left'])
         )
 
         self.interfaces = {
-            'bottom_f': self.front.interfaces['bottom'],  
+            'bottom_f': self.front.interfaces['bottom'],
             'bottom_b': self.back.interfaces['bottom'],
 
             'top_f': self.front.interfaces['top'],
@@ -86,7 +90,7 @@ class StraightWB(BaseBand):
                 self.front.interfaces['bottom'],
                 self.back.interfaces['bottom']),
             'top': pyg.Interface.from_multiple(
-                self.front.interfaces['top'], 
+                self.front.interfaces['top'],
                 self.back.interfaces['top']),
         }
 
@@ -94,15 +98,16 @@ class StraightWB(BaseBand):
         back_width = self.top_width * self.top_back_fraction
 
         self.front = StraightBandPanel(
-            'wb_front', 
-            self.top_width - back_width, 
+            'wb_front',
+            self.top_width - back_width,
             self.width,
-            match_int_proportion=self.body['waist'] - self.body['waist_back_width']
+            match_int_proportion=self.body['waist'] -
+            self.body['waist_back_width']
         )
-          
+
         self.back = StraightBandPanel(
-            'wb_back', 
-            back_width, 
+            'wb_back',
+            back_width,
             self.width,
             match_int_proportion=self.body['waist_back_width']
         )
@@ -113,9 +118,10 @@ class FittedWB(StraightWB):
             and hence sits tight
         Made out of two circular arc panels
     """
+
     def __init__(self, body, design, rise=1.) -> None:
         """A waistband that ~follows the body curvature, and hence sits tight
-        
+
             * rise -- the rise value of the bottoms that the WB is attached to 
                 Adapts the shape of the waistband to sit tight on top 
                 of the given rise level. If 1. or anything less than waistband width, 
@@ -130,20 +136,22 @@ class FittedWB(StraightWB):
             self.hips, self.waist, self.rise)
         self.bottom_back_fraction = pyg.utils.lin_interpolation(
             self.hips_back_frac, self.waist_back_frac, self.rise)
-        
+
         self.front = CircleArcPanel.from_all_length(
-            'wb_front', 
-            self.width, 
-            self.top_width * (1 - self.top_back_fraction), 
+            'wb_front',
+            self.width,
+            self.top_width * (1 - self.top_back_fraction),
             self.bottom_width * (1 - self.bottom_back_fraction),
-            match_top_int_proportion=self.body['waist'] - self.body['waist_back_width'],
-            match_bottom_int_proportion=self.body['waist'] - self.body['waist_back_width']
+            match_top_int_proportion=self.body['waist'] -
+            self.body['waist_back_width'],
+            match_bottom_int_proportion=self.body['waist'] -
+            self.body['waist_back_width']
         )
-        
+
         self.back = CircleArcPanel.from_all_length(
-            'wb_back', 
-            self.width, 
-            self.top_width * self.top_back_fraction, 
+            'wb_back',
+            self.width,
+            self.top_width * self.top_back_fraction,
             self.bottom_width * self.bottom_back_fraction,
             match_top_int_proportion=self.body['waist_back_width'],
             match_bottom_int_proportion=self.body['waist_back_width']
@@ -154,6 +162,7 @@ class CuffBand(BaseBand):
     """ Cuff class for sleeves or pants
         band-like piece of fabric with optional "skirt"
     """
+
     def __init__(self, tag, design, length=None) -> None:
         super().__init__(body=None, design=design, tag=tag)
 
@@ -164,10 +173,10 @@ class CuffBand(BaseBand):
 
         self.front = StraightBandPanel(
             f'{tag}_cuff_f', self.design['b_width']['v'] / 2, length)
-        self.front.translate_by([0, 0, 15])  
+        self.front.translate_by([0, 0, 15])
         self.back = StraightBandPanel(
             f'{tag}_cuff_b', self.design['b_width']['v'] / 2, length)
-        self.back.translate_by([0, 0, -15])  
+        self.back.translate_by([0, 0, -15])
 
         self.stitching_rules = pyg.Stitches(
             (self.front.interfaces['right'], self.back.interfaces['right']),
@@ -176,12 +185,12 @@ class CuffBand(BaseBand):
 
         self.interfaces = {
             'bottom': pyg.Interface.from_multiple(
-                self.front.interfaces['bottom'], 
+                self.front.interfaces['bottom'],
                 self.back.interfaces['bottom']),
             'top_front': self.front.interfaces['top'],
             'top_back': self.back.interfaces['top'],
             'top': pyg.Interface.from_multiple(
-                self.front.interfaces['top'], 
+                self.front.interfaces['top'],
                 self.back.interfaces['top']),
         }
 
@@ -200,15 +209,15 @@ class CuffSkirt(BaseBand):
             length = self.design['cuff_len']['v']
 
         self.front = skirt_paneled.SkirtPanel(
-            f'{tag}_cuff_skirt_f', ruffles=self.design['skirt_ruffle']['v'], 
-            waist_length=width / 2, length=length, 
+            f'{tag}_cuff_skirt_f', ruffles=self.design['skirt_ruffle']['v'],
+            waist_length=width / 2, length=length,
             flare=flare_diff)
-        self.front.translate_by([0, 0, 15])  
+        self.front.translate_by([0, 0, 15])
         self.back = skirt_paneled.SkirtPanel(
-            f'{tag}_cuff_skirt_b', ruffles=self.design['skirt_ruffle']['v'], 
-            waist_length=width / 2, length=length, 
+            f'{tag}_cuff_skirt_b', ruffles=self.design['skirt_ruffle']['v'],
+            waist_length=width / 2, length=length,
             flare=flare_diff)
-        self.back.translate_by([0, 0, -15])  
+        self.back.translate_by([0, 0, -15])
 
         self.stitching_rules = pyg.Stitches(
             (self.front.interfaces['right'], self.back.interfaces['right']),
@@ -221,7 +230,7 @@ class CuffSkirt(BaseBand):
             'top_front': self.front.interfaces['top'],
             'top_back': self.back.interfaces['top'],
             'bottom': pyg.Interface.from_multiple(
-                self.front.interfaces['bottom'], 
+                self.front.interfaces['bottom'],
                 self.back.interfaces['bottom']),
         }
 
@@ -230,18 +239,21 @@ class CuffBandSkirt(pyg.Component):
     """ Cuff class for sleeves or pants
         band-like piece of fabric with optional "skirt"
     """
+
     def __init__(self, tag, design) -> None:
         super().__init__(self.__class__.__name__)
 
         self.cuff = CuffBand(
-            tag, 
-            design, 
-            length=design['cuff']['cuff_len']['v'] * (1 - design['cuff']['skirt_fraction']['v'])
+            tag,
+            design,
+            length=design['cuff']['cuff_len']['v'] *
+            (1 - design['cuff']['skirt_fraction']['v'])
         )
         self.skirt = CuffSkirt(
-            tag, 
-            design, 
-            length=design['cuff']['cuff_len']['v'] * design['cuff']['skirt_fraction']['v']
+            tag,
+            design,
+            length=design['cuff']['cuff_len']['v'] *
+            design['cuff']['skirt_fraction']['v']
         )
 
         # Align

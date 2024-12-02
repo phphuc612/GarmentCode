@@ -1,16 +1,12 @@
 import numpy as np
-from numpy.linalg import norm
 import svgpathtools as svgpath
+from numpy.linalg import norm
+from pygarment.garmentcode.edge import (CircleEdge, CurveEdge, Edge,
+                                        EdgeSequence)
+from pygarment.garmentcode.utils import (bbox_paths, c_to_list, close_enough,
+                                         list_to_c, vector_angle)
+from pygarment.pattern.utils import abs_to_rel_2d, rel_to_abs_2d
 from scipy.optimize import minimize
-
-from pygarment.garmentcode.edge import EdgeSequence, Edge, CurveEdge
-from pygarment.garmentcode.edge import CircleEdge
-from pygarment.garmentcode.utils import vector_angle
-from pygarment.garmentcode.utils import bbox_paths
-from pygarment.garmentcode.utils import close_enough
-from pygarment.garmentcode.utils import c_to_list
-from pygarment.garmentcode.utils import list_to_c
-from pygarment.pattern.utils import rel_to_abs_2d, abs_to_rel_2d
 
 
 class EdgeFactory:
@@ -36,9 +32,11 @@ class EdgeFactory:
         elif isinstance(seg, svgpath.CubicBezier):
             cp = [c_to_list(seg.control1), c_to_list(seg.control2)]
         else:
-            raise NotImplementedError(f'CurveEdge::ERROR::Incorrect curve type supplied {seg.type}')
-        
+            raise NotImplementedError(
+                f'CurveEdge::ERROR::Incorrect curve type supplied {seg.type}')
+
         return CurveEdge(start, end, cp, relative=False)
+
 
 class CircleEdgeFactory:
     @staticmethod
@@ -72,7 +70,7 @@ class CircleEdgeFactory:
         # Find circle center
         str_dist = norm(np.asarray(end) - np.asarray(start))
 
-        # NOTE: close enough values may give negative 
+        # NOTE: close enough values may give negative
         # value under sqrt due to numerical errors
         if close_enough(radius ** 2, str_dist ** 2 / 4, 1e-3):
             center_r = 0.
@@ -152,6 +150,7 @@ class CircleEdgeFactory:
             start, end, radius=rad,
             large_arc=mid_dist > rad, right=angle > 0)
 
+
 class CurveEdgeFactory:
     @staticmethod
     def curve_3_points(start, end, target, verbose=False):
@@ -169,8 +168,8 @@ class CurveEdgeFactory:
         # Initialization with a target point as control point
         # Ensures very smooth, minimal solution
         out = minimize(
-            _fit_pass_point, 
-            rel_target,    
+            _fit_pass_point,
+            rel_target,
             args=(rel_target)
         )
 
@@ -188,34 +187,38 @@ class CurveEdgeFactory:
                             initial_guess=None, verbose=False):
         """Create Quadratic Bezier curve connecting given points with the target tangents
             (both or any of the two can be specified)
-        
+
             NOTE: Target tangent vectors are automatically normalized
         """
 
         if target_tan0 is not None:
-            target_tan0 = abs_to_rel_2d(start, end, target_tan0, as_vector=True)
+            target_tan0 = abs_to_rel_2d(
+                start, end, target_tan0, as_vector=True)
             target_tan0 /= norm(target_tan0)
-        
+
         if target_tan1 is not None:
-            target_tan1 = abs_to_rel_2d(start, end, target_tan1, as_vector=True)
+            target_tan1 = abs_to_rel_2d(
+                start, end, target_tan1, as_vector=True)
             target_tan1 /= norm(target_tan1)
-        
+
         # Initialization with a target point as control point
         # Ensures very smooth, minimal solution
         out = minimize(
-            _fit_tangents, 
+            _fit_tangents,
             [0.5, 0] if initial_guess is None else initial_guess,
             args=(target_tan0, target_tan1)
         )
 
         if not out.success:
-            print('CurveEdgeFactory::Curve From Tangents::WARNING::Optimization not successful')
+            print(
+                'CurveEdgeFactory::Curve From Tangents::WARNING::Optimization not successful')
             if verbose:
                 print(out)
 
         cp = out.x.tolist()
 
         return CurveEdge(start, end, control_points=[cp], relative=True)
+
 
 class EdgeSeqFactory:
     """Create EdgeSequence objects for some common edge sequence patterns
@@ -261,7 +264,7 @@ class EdgeSeqFactory:
 
         if loop:
             seq.append(Edge(seq[-1].end, seq[0].start))
-        
+
         seq.isChained()  # print warning if smth is wrong
         return seq
 
@@ -275,17 +278,18 @@ class EdgeSeqFactory:
         """
         frac = [abs(f) for f in frac]
         if not close_enough(fsum := sum(frac), 1, 1e-4):
-            raise RuntimeError(f'EdgeSequence::ERROR::fraction is incorrect. The sum {fsum} is not 1')
+            raise RuntimeError(
+                f'EdgeSequence::ERROR::fraction is incorrect. The sum {fsum} is not 1')
 
         vec = np.asarray(end) - np.asarray(start)
         verts = [start]
         for i in range(len(frac) - 1):
             verts.append(
                 [verts[-1][0] + frac[i]*vec[0],
-                verts[-1][1] + frac[i]*vec[1]]
+                 verts[-1][1] + frac[i]*vec[1]]
             )
         verts.append(end)
-        
+
         return EdgeSeqFactory.from_verts(*verts)
 
     @staticmethod
@@ -322,7 +326,7 @@ class EdgeSeqFactory:
             )
 
         if depth is None:
-            if width / 2 > side_len: 
+            if width / 2 > side_len:
                 raise ValueError(
                     f'EdgeFactory::ERROR::Requested dart shape (w={width}, side={side_len}) '
                     'does not form a valid triangle')
@@ -337,7 +341,7 @@ class EdgeSeqFactory:
 
         * target_height -- scales the shape s.t. it's height matches the given
             number
-        
+
         Shapes restrictions: 
             1) every path in the provided SVG is assumed to form a closed loop
                 that has exactly 2 intersection points with a vertical line
@@ -382,6 +386,8 @@ class EdgeSeqFactory:
         return left_seqs, right_seqs
 
 # --- For Curves ---
+
+
 def _fit_pass_point(cp, target_location):
     """ Fit the control point of basic [[0, 0] -> [1, 0]] Quadratic Bezier s.t. 
         it passes through the target location.
@@ -400,9 +406,9 @@ def _fit_pass_point(cp, target_location):
     curve = svgpath.QuadraticBezier(*params)
 
     inter_segment = svgpath.Line(
-            target_location[0] + 1j * target_location[1] * 2,
-            target_location[0] + 1j * (- target_location[1] * 2)
-        )
+        target_location[0] + 1j * target_location[1] * 2,
+        target_location[0] + 1j * (- target_location[1] * 2)
+    )
 
     intersect_t = curve.intersect(inter_segment)
     point = curve.point(intersect_t[0][0])
@@ -422,24 +428,24 @@ def _fit_tangents(cp, target_tangent_start, target_tangent_end, reg_strength=0.0
             expressed in RELATIVE coordinates to your desired edge
     """
     control_bezier = np.array([
-        [0, 0], 
-        cp, 
+        [0, 0],
+        cp,
         [1, 0]
     ])
     params = list_to_c(control_bezier)
     curve = svgpath.QuadraticBezier(*params)
 
     fin = 0
-    if target_tangent_start is not None: 
+    if target_tangent_start is not None:
         # NOTE: tangents seems to use opposite left/right convention
         target0 = target_tangent_start[0] + 1j*target_tangent_start[1]
         fin += (abs(curve.unit_tangent(0) - target0))**2
-    
-    if target_tangent_end is not None: 
+
+    if target_tangent_end is not None:
         target1 = target_tangent_end[0] + 1j*target_tangent_end[1]
         fin += (abs(curve.unit_tangent(1) - target1))**2
 
-    # NOTE: Tried _max_curvature() and Y value regularizaton, 
+    # NOTE: Tried _max_curvature() and Y value regularizaton,
     # but it seems like they are not needed
     return fin
 
@@ -466,9 +472,9 @@ def split_half_svg_paths(paths):
 
     # Mid-Intersection
     inter_segment = svgpath.Line(
-            center_x + 1j * bbox[2],
-            center_x + 1j * bbox[3]
-        )
+        center_x + 1j * bbox[2],
+        center_x + 1j * bbox[3]
+    )
 
     right, left = [], []
     for p in paths:
@@ -476,7 +482,8 @@ def split_half_svg_paths(paths):
         intersect_t = p.intersect(inter_segment)
 
         if len(intersect_t) != 2:
-            raise ValueError(f'SplitSVGHole::ERROR::Each Provided Svg path should cross vertical like exactly 2 times')
+            raise ValueError(
+                f'SplitSVGHole::ERROR::Each Provided Svg path should cross vertical like exactly 2 times')
 
         # Split
         from_T, to_T = intersect_t[0][0][0], intersect_t[1][0][0]
